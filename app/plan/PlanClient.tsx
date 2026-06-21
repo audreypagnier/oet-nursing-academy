@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { computeReadiness, type ReadinessData } from "../lib/readiness";
 
 /* ─── Types ───────────────────────────────────────────────────── */
 
@@ -403,6 +404,7 @@ const PLANS: Record<Level, PlanConfig> = {
 
 export default function PlanClient() {
   const [result, setResult] = useState<AssessmentResult | null | "loading">("loading");
+  const [readiness, setReadiness] = useState<ReadinessData | null>(null);
 
   useEffect(() => {
     try {
@@ -411,6 +413,7 @@ export default function PlanClient() {
     } catch {
       setResult(null);
     }
+    setReadiness(computeReadiness());
   }, []);
 
   if (result === "loading") return <Shell><LoadingState /></Shell>;
@@ -520,6 +523,9 @@ export default function PlanClient() {
           </div>
         </div>
 
+        {/* Readiness score */}
+        {readiness && <PlanReadinessCard readiness={readiness} />}
+
         {/* CTA buttons */}
         <div className="bg-[#0B1E4B] rounded-2xl p-6 mb-5">
           <h2 className="text-white font-semibold mb-1">Commencer maintenant</h2>
@@ -626,6 +632,57 @@ function LoadingState() {
       <div className="h-28 bg-gray-200 rounded-2xl" />
       <div className="h-96 bg-gray-200 rounded-2xl" />
       <div className="h-32 bg-gray-200 rounded-2xl" />
+    </div>
+  );
+}
+
+function PlanReadinessCard({ readiness }: { readiness: ReadinessData }) {
+  const { score, level } = readiness;
+  return (
+    <div className={`rounded-2xl border p-6 mb-6 ${level.bg} ${level.border}`}>
+      <div className="flex items-center justify-between gap-4 mb-3">
+        <div>
+          <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full mb-2 ${level.badge}`}>
+            {level.label}
+          </span>
+          <h3 className="font-bold text-[#0B1E4B]">Score de préparation OET</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Estimation indicative — pas un résultat officiel OET</p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <span className={`text-4xl font-bold ${level.color}`}>{score}</span>
+          <span className="text-gray-400 text-sm"> / 100</span>
+        </div>
+      </div>
+
+      <div className="h-2.5 bg-white/60 rounded-full overflow-hidden mb-4">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{
+            width: `${score}%`,
+            background: score >= 75 ? "#00C2C7" : score >= 60 ? "#f59e0b" : score >= 40 ? "#f97316" : "#ef4444",
+          }}
+        />
+      </div>
+
+      <p className="text-sm text-gray-700 leading-relaxed mb-4">{level.description}</p>
+
+      {/* Target scores */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {level.targetScores.map((ts) => (
+          <div key={ts.skill} className="bg-white/60 rounded-xl px-3 py-2.5">
+            <p className="text-xs text-gray-500 mb-0.5">{ts.skill}</p>
+            <p className="text-sm font-bold text-[#0B1E4B]">{ts.target}</p>
+            {ts.note && <p className="text-xs text-gray-400 mt-0.5">{ts.note}</p>}
+          </div>
+        ))}
+      </div>
+
+      <Link
+        href="/dashboard"
+        className="text-sm font-semibold text-[#009DA1] hover:underline"
+      >
+        Voir le détail du score →
+      </Link>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { computeReadiness, type ReadinessData } from "../lib/readiness";
 
 /* ─── Types ───────────────────────────────────────────────────── */
 
@@ -72,6 +73,7 @@ function scoreToPercent(fraction: string) {
 
 export default function DashboardClient() {
   const [result, setResult] = useState<AssessmentResult | null | "loading">("loading");
+  const [readiness, setReadiness] = useState<ReadinessData | null>(null);
 
   useEffect(() => {
     try {
@@ -80,6 +82,7 @@ export default function DashboardClient() {
     } catch {
       setResult(null);
     }
+    setReadiness(computeReadiness());
   }, []);
 
   if (result === "loading") return <Shell><LoadingState /></Shell>;
@@ -161,6 +164,9 @@ export default function DashboardClient() {
             )}
           </div>
         </div>
+
+        {/* Readiness score */}
+        {readiness && <ReadinessCard readiness={readiness} />}
 
         {/* CTA */}
         <div className="bg-[#0B1E4B] rounded-2xl p-6 mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -253,6 +259,109 @@ function LoadingState() {
       <div className="h-40 bg-gray-200 rounded-2xl" />
       <div className="h-48 bg-gray-200 rounded-2xl" />
       <div className="h-20 bg-gray-200 rounded-2xl" />
+    </div>
+  );
+}
+
+function ReadinessCard({ readiness }: { readiness: ReadinessData }) {
+  const { score, breakdown, level } = readiness;
+  const breakdownItems = [
+    { label: "Évaluation", pts: breakdown.assessment, max: 50 },
+    { label: "Vocabulaire", pts: breakdown.vocabulary, max: 20 },
+    { label: "Speaking", pts: breakdown.speaking, max: 15 },
+    { label: "Writing", pts: breakdown.writing, max: 15 },
+  ];
+
+  return (
+    <div className={`rounded-2xl border p-6 mb-5 ${level.bg} ${level.border}`}>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${level.badge}`}>
+              {level.label}
+            </span>
+          </div>
+          <h3 className="font-bold text-[#0B1E4B] text-lg">Score de préparation OET</h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Estimation indicative — pas un résultat officiel OET
+          </p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <span className={`text-4xl font-bold ${level.color}`}>{score}</span>
+          <span className="text-gray-400 text-sm"> / 100</span>
+        </div>
+      </div>
+
+      {/* Global bar */}
+      <div className="h-2.5 bg-white/60 rounded-full overflow-hidden mb-5">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{
+            width: `${score}%`,
+            background: score >= 75 ? "#00C2C7" : score >= 60 ? "#f59e0b" : score >= 40 ? "#f97316" : "#ef4444",
+          }}
+        />
+      </div>
+
+      {/* Description */}
+      <p className="text-sm text-gray-700 leading-relaxed mb-5">{level.description}</p>
+
+      {/* Breakdown mini-bars */}
+      <div className="bg-white/60 rounded-xl p-4 mb-5 space-y-3">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          Détail du score
+        </p>
+        {breakdownItems.map((item) => (
+          <div key={item.label}>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-gray-600 font-medium">{item.label}</span>
+              <span className="text-[#0B1E4B] font-semibold">
+                {item.pts} / {item.max}
+              </span>
+            </div>
+            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#00C2C7] rounded-full"
+                style={{ width: `${Math.round((item.pts / item.max) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Target scores */}
+      <div className="mb-5">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          Scores OET cibles
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {level.targetScores.map((ts) => (
+            <div key={ts.skill} className="bg-white/60 rounded-xl px-3 py-2.5">
+              <p className="text-xs text-gray-500 mb-0.5">{ts.skill}</p>
+              <p className="text-sm font-bold text-[#0B1E4B]">{ts.target}</p>
+              {ts.note && <p className="text-xs text-gray-400 mt-0.5">{ts.note}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Recommendations */}
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+          Recommandations
+        </p>
+        <ul className="space-y-2">
+          {level.recs.map((rec, i) => (
+            <li key={i} className="flex items-start gap-2.5 text-sm text-gray-700">
+              <span className="w-4 h-4 rounded-full bg-[#00C2C7]/20 text-[#009DA1] flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-bold">
+                {i + 1}
+              </span>
+              {rec}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
