@@ -763,6 +763,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/plan" className="hover:text-[#0B1E4B] transition-colors">Mon plan</Link>
           <Link href="/readiness" className="hover:text-[#0B1E4B] transition-colors">Mon score</Link>
           <Link href="/daily-practice" className="hover:text-[#0B1E4B] transition-colors">Routine du jour</Link>
+          <Link href="/progress" className="hover:text-[#0B1E4B] transition-colors">Progression</Link>
         </nav>
       </header>
       <main className="flex-1 flex flex-col items-center px-6 py-10">
