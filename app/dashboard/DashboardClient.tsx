@@ -215,12 +215,10 @@ function Shell({ children }: { children: React.ReactNode }) {
           <span className="text-[#00C2C7] text-xl font-bold">OET</span>
           <span className="text-[#0B1E4B] text-sm font-medium">Nursing Academy</span>
         </Link>
-        <Link
-          href="/assessment"
-          className="text-sm text-gray-500 hover:text-[#0B1E4B] transition-colors"
-        >
-          Évaluation
-        </Link>
+        <nav className="hidden sm:flex items-center gap-5 text-sm text-gray-500">
+          <Link href="/plan" className="hover:text-[#0B1E4B] transition-colors">Mon plan</Link>
+          <Link href="/readiness" className="hover:text-[#0B1E4B] transition-colors">Mon score</Link>
+        </nav>
       </header>
       <main className="flex-1 flex flex-col items-center px-6 py-12">
         {children}

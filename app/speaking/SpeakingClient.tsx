@@ -215,9 +215,10 @@ export default function SpeakingClient() {
           <span className="text-[#00C2C7] text-xl font-bold">OET</span>
           <span className="text-[#0B1E4B] text-sm font-medium">Nursing Academy</span>
         </Link>
-        <nav className="flex items-center gap-5 text-sm text-gray-500">
-          <Link href="/vocabulary" className="hover:text-[#0B1E4B] transition-colors">Vocabulaire</Link>
+        <nav className="hidden sm:flex items-center gap-5 text-sm text-gray-500">
+          <Link href="/dashboard" className="hover:text-[#0B1E4B] transition-colors">Tableau de bord</Link>
           <Link href="/plan" className="hover:text-[#0B1E4B] transition-colors">Mon plan</Link>
+          <Link href="/readiness" className="hover:text-[#0B1E4B] transition-colors">Mon score</Link>
         </nav>
       </header>
 

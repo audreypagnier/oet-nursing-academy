@@ -115,7 +115,7 @@ function HeroCard() {
   const skills = [
     { label: "Listening", score: 88, color: "#00C2C7" },
     { label: "Reading", score: 92, color: "#00C2C7" },
-    { label: "Writing", score: 85, color: "#33D1D5" },
+    { label: "Writing", score: 85, color: "#00C2C7" },
     { label: "Speaking", score: 90, color: "#00C2C7" },
   ];
   return (
@@ -421,7 +421,7 @@ function CTA() {
 /* ─── Footer ──────────────────────────────────────────────────── */
 function Footer() {
   return (
-    <footer className="bg-[#071230] py-10">
+    <footer className="bg-[#0B1E4B] py-10">
       <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className="text-[#00C2C7] font-bold text-lg">OET</span>
