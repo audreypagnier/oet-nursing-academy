@@ -910,13 +910,12 @@ function ScenarioView({
 
         {/* Transcript */}
         <div className="bg-[#F7F9FC] border border-gray-100 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-full bg-[#0B1E4B] flex items-center justify-center flex-shrink-0">
-              <svg className="w-3.5 h-3.5 text-[#00C2C7]" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-              </svg>
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-base">📄</span>
+              <span className="text-xs font-semibold text-[#0B1E4B] uppercase tracking-wide">Transcript d&apos;écoute</span>
             </div>
-            <span className="text-xs font-semibold text-[#0B1E4B] uppercase tracking-wide">Transcription audio</span>
+            <span className="text-xs text-gray-400 italic">Version transcript — audio réel à venir</span>
           </div>
           <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line font-mono">
             {scenario.transcript}
