@@ -8,9 +8,25 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "OET Nursing Academy — Devenez infirmier(ère) aux États-Unis",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_BASE_URL ?? "https://oetnursingacademy.com",
+  ),
+  title: "Prepare Your OET Nursing Exam | OET Nursing Academy",
   description:
-    "Formation OET Nursing pour infirmiers francophones. Préparez votre OET et obtenez votre licence RN américaine avec un accompagnement expert et personnalisé.",
+    "Interactive OET Nursing preparation platform. Vocabulary, Listening, Reading, Speaking, Writing, AI feedback and daily study plans.",
+  openGraph: {
+    title: "Prepare Your OET Nursing Exam",
+    description:
+      "Train every day with guided OET Nursing practice, AI Writing evaluation, Listening, Reading, Speaking and Vocabulary modules.",
+    siteName: "OET Nursing Academy",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Prepare Your OET Nursing Exam",
+    description: "Your complete OET Nursing Academy.",
+  },
 };
 
 export default function RootLayout({
