@@ -951,7 +951,7 @@ function AudioPlayer({ src }: { src: string }) {
       </div>
 
       <p className="text-white/50 text-xs mt-3 text-center">
-        Écoutez l&apos;extrait, puis répondez aux questions ci-dessous.
+        Audio generated for training purposes.
       </p>
     </div>
   );
