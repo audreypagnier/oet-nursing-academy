@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "../lib/auth-context";
+import { fetchRemoteDailyProgress, pushDailyProgress } from "../lib/sync/dailyProgress";
 
 /* ─── Module data ─────────────────────────────────────────────── */
 
@@ -268,6 +270,11 @@ function PlanTaskCard({ task, done, index }: { task: DailyTask; done: boolean; i
 /* ─── Main component ──────────────────────────────────────────── */
 
 export default function DailyPracticeClient() {
+  const { user, loading: authLoading } = useAuth();
+  // Stable ref so fire-and-forget callbacks always see the latest user ID
+  const userIdRef = useRef<string | null>(null);
+  useEffect(() => { userIdRef.current = user?.id ?? null; }, [user?.id]);
+
   const [hydrated,      setHydrated]      = useState(false);
   const [view,          setView]          = useState<View>("plan");
   const [sessionQueue,  setSessionQueue]  = useState<DailyTask[]>([]);
@@ -338,6 +345,36 @@ export default function DailyPracticeClient() {
     setHydrated(true);
   }, []);
 
+  // ── Supabase sync: runs once auth resolves for a logged-in user ──
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    const days = getLast7Days();
+    const dates = days.map(d => d.key.replace("oet_daily_practice_", ""));
+
+    fetchRemoteDailyProgress(user.id, dates).then(remote => {
+      // Merge today's remote tasks into local state
+      const todayDate = dates[dates.length - 1];
+      const remoteTodayIds = remote[todayDate] ?? [];
+      if (remoteTodayIds.length > 0) {
+        setCompleted(prev => {
+          const merged = new Set([...prev, ...remoteTodayIds]);
+          try { localStorage.setItem(STORAGE_KEY(TODAY_DATE), JSON.stringify([...merged])); } catch {}
+          return merged;
+        });
+      }
+      // Update week calendar with any remote days that have data
+      setWeekCompleted(prev => {
+        const next = [...prev];
+        dates.forEach((date, i) => {
+          if ((remote[date] ?? []).length > 0) next[i] = true;
+        });
+        return next;
+      });
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.id]);
+
   /* ── Derived ── */
 
   const plan          = hydrated ? generatePlan(appState) : [];
@@ -352,9 +389,15 @@ export default function DailyPracticeClient() {
   /* ── Actions ── */
 
   function save(next: Set<string>) {
+    // Update state immediately — counter reflects change at once
     setCompleted(next);
+    // Always persist to localStorage (works for logged-out users too)
     try { localStorage.setItem(STORAGE_KEY(TODAY_DATE), JSON.stringify([...next])); } catch {}
     setWeekCompleted(prev => { const n = [...prev]; n[6] = next.size > 0; return n; });
+    // Fire-and-forget push to Supabase for logged-in users
+    if (userIdRef.current) {
+      pushDailyProgress(userIdRef.current, TODAY_DATE, [...next]).catch(() => {});
+    }
   }
 
   function startSession() {
