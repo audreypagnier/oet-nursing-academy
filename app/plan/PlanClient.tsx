@@ -534,7 +534,7 @@ export default function PlanClient() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Link
-              href="/#contact"
+              href="/daily-practice"
               className="flex flex-col items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl px-4 py-4 text-center transition-colors group"
             >
               <span className="text-xl">📖</span>
@@ -542,7 +542,7 @@ export default function PlanClient() {
               <span className="text-white/50 text-xs">Mémoriser les termes OET</span>
             </Link>
             <Link
-              href="/#contact"
+              href="/daily-practice"
               className="flex flex-col items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl px-4 py-4 text-center transition-colors group"
             >
               <span className="text-xl">🎙️</span>
@@ -550,7 +550,7 @@ export default function PlanClient() {
               <span className="text-white/50 text-xs">Simuler une consultation</span>
             </Link>
             <Link
-              href="/#contact"
+              href="/daily-practice"
               className="flex flex-col items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl px-4 py-4 text-center transition-colors group"
             >
               <span className="text-xl">✍️</span>

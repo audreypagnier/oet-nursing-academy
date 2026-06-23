@@ -175,7 +175,7 @@ export default function DashboardClient() {
             <p className="text-white/60 text-sm">Accédez à votre parcours OET personnalisé.</p>
           </div>
           <Link
-            href="/#contact"
+            href="/dashboard"
             className="flex-shrink-0 bg-[#00C2C7] hover:bg-[#009DA1] text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm whitespace-nowrap"
           >
             Continuer mon parcours OET →

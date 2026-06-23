@@ -1,12 +1,14 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <div className="font-[var(--font-geist-sans)]">
       <Nav />
       <Hero />
+      <QuickAccess />
       <WhatIsOET />
       <OETvsIELTS />
       <ExamStructure />
-      <CTA />
       <Footer />
     </div>
   );
@@ -25,13 +27,14 @@ function Nav() {
           <a href="#oet" className="hover:text-[#00C2C7] transition-colors">L&apos;OET</a>
           <a href="#comparaison" className="hover:text-[#00C2C7] transition-colors">OET vs IELTS</a>
           <a href="#examen" className="hover:text-[#00C2C7] transition-colors">L&apos;Examen</a>
+          <Link href="/progress" className="hover:text-[#00C2C7] transition-colors">Progression</Link>
         </nav>
-        <a
-          href="#contact"
+        <Link
+          href="/assessment"
           className="bg-[#00C2C7] hover:bg-[#009DA1] text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-colors"
         >
           Commencer
-        </a>
+        </Link>
       </div>
     </header>
   );
@@ -41,7 +44,6 @@ function Nav() {
 function Hero() {
   return (
     <section className="relative min-h-screen flex items-center bg-[#0B1E4B] overflow-hidden">
-      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-[#00C2C7]/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 -left-20 w-80 h-80 bg-[#00C2C7]/5 rounded-full blur-3xl" />
@@ -68,21 +70,21 @@ function Hero() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4">
-            <a
-              href="#contact"
+            <Link
+              href="/assessment"
               className="inline-flex items-center justify-center gap-2 bg-[#00C2C7] hover:bg-[#009DA1] text-white font-semibold px-8 py-4 rounded-full transition-colors text-base"
             >
               Démarrer ma formation
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
-            </a>
-            <a
-              href="#oet"
+            </Link>
+            <Link
+              href="/daily-practice"
               className="inline-flex items-center justify-center gap-2 border border-white/30 text-white hover:border-white/60 font-semibold px-8 py-4 rounded-full transition-colors text-base"
             >
-              En savoir plus
-            </a>
+              Commencer à réviser
+            </Link>
           </div>
 
           <div className="mt-12 flex items-center gap-8">
@@ -155,6 +157,52 @@ function HeroCard() {
   );
 }
 
+/* ─── Quick Access ────────────────────────────────────────────── */
+function QuickAccess() {
+  const links = [
+    { href: "/assessment", label: "Test de niveau", icon: "📋", desc: "Évaluez votre niveau actuel" },
+    { href: "/daily-practice", label: "Routine du jour", icon: "📅", desc: "Session quotidienne 20 min" },
+    { href: "/vocabulary", label: "Vocabulaire", icon: "📚", desc: "Fiches de vocabulaire médical" },
+    { href: "/reading", label: "Reading", icon: "📖", desc: "Exercices de lecture clinique" },
+    { href: "/speaking", label: "Speaking", icon: "🎤", desc: "Jeux de rôle patient" },
+    { href: "/writing", label: "Writing", icon: "✍️", desc: "Lettres de transfert" },
+    { href: "/mock-exam", label: "Examen blanc", icon: "🎯", desc: "Simulation complète OET" },
+    { href: "/progress", label: "Progression", icon: "📊", desc: "Tableau de bord complet" },
+  ];
+
+  return (
+    <section id="acces-rapide" className="py-20 bg-[#F7F9FC]">
+      <div className="max-w-6xl mx-auto px-6">
+        <SectionLabel>Accès rapide</SectionLabel>
+        <h2 className="text-3xl md:text-4xl font-bold text-[#0B1E4B] mt-3 mb-4">
+          Commencez à réviser maintenant
+        </h2>
+        <p className="text-lg text-gray-600 max-w-2xl mb-12 leading-relaxed">
+          Accédez directement à tous les modules de formation. Aucune inscription requise.
+        </p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {links.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="bg-white border border-gray-200 rounded-2xl p-5 hover:border-[#00C2C7]/50 hover:shadow-md transition-all group flex flex-col gap-3"
+            >
+              <span className="text-2xl">{l.icon}</span>
+              <div>
+                <p className="font-semibold text-[#0B1E4B] group-hover:text-[#00C2C7] transition-colors text-sm">
+                  {l.label}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5 leading-snug">{l.desc}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ─── What is OET ─────────────────────────────────────────────── */
 function WhatIsOET() {
   const points = [
@@ -201,6 +249,18 @@ function WhatIsOET() {
               <p className="text-gray-600 leading-relaxed">{p.desc}</p>
             </div>
           ))}
+        </div>
+
+        <div className="mt-12 text-center">
+          <Link
+            href="/assessment"
+            className="inline-flex items-center gap-2 bg-[#0B1E4B] hover:bg-[#0B1E4B]/90 text-white font-semibold px-8 py-4 rounded-full transition-colors"
+          >
+            Tester mon niveau gratuitement
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
         </div>
       </div>
     </section>
@@ -273,6 +333,7 @@ function ExamStructure() {
     {
       number: "01",
       skill: "Listening",
+      href: "/daily-practice",
       duration: "40 min",
       desc: "Deux parties : une consultation entre soignant et patient, puis un exposé médical. Vous répondez à des questions de compréhension sur des situations cliniques réelles.",
       tips: ["Entraînez-vous à l'accent américain", "Notez les termes médicaux clés", "Anticipez les informations importantes"],
@@ -280,6 +341,7 @@ function ExamStructure() {
     {
       number: "02",
       skill: "Reading",
+      href: "/reading",
       duration: "60 min",
       desc: "Trois parties avec des textes de longueur croissante : notices médicales, articles de santé, textes professionnels. Travaillez la vitesse de lecture et le repérage d'informations.",
       tips: ["Skimming et scanning efficaces", "Maîtriser le vocabulaire médical", "Gestion stricte du temps"],
@@ -287,6 +349,7 @@ function ExamStructure() {
     {
       number: "03",
       skill: "Writing",
+      href: "/writing",
       duration: "45 min",
       desc: "Rédaction d'une lettre de transfert ou de référence à partir de notes de cas. L'épreuve évalue votre capacité à synthétiser des informations médicales pour un confrère.",
       tips: ["Structure : objet, antécédents, traitement, recommandation", "Ton formel et précis", "Pas de copier-coller des notes"],
@@ -294,6 +357,7 @@ function ExamStructure() {
     {
       number: "04",
       skill: "Speaking",
+      href: "/speaking",
       duration: "20 min",
       desc: "Deux jeux de rôle de 5 minutes chacun avec un interlocuteur. Vous simulez des consultations : recueil d'informations, annonce de diagnostic, éducation thérapeutique.",
       tips: ["Empathie et clarté", "Utiliser des reformulations", "Maîtriser l'explication de traitements"],
@@ -328,9 +392,12 @@ function ExamStructure() {
                     <span className="text-sm text-gray-400">{p.duration}</span>
                   </div>
                 </div>
-                <span className="bg-[#00C2C7]/10 text-[#009DA1] text-xs font-semibold px-3 py-1 rounded-full">
-                  Grade B requis
-                </span>
+                <Link
+                  href={p.href}
+                  className="bg-[#00C2C7]/10 hover:bg-[#00C2C7]/20 text-[#009DA1] text-xs font-semibold px-3 py-1 rounded-full transition-colors"
+                >
+                  S&apos;entraîner →
+                </Link>
               </div>
 
               <p className="text-gray-600 leading-relaxed mb-6">{p.desc}</p>
@@ -350,68 +417,26 @@ function ExamStructure() {
             </div>
           ))}
         </div>
-      </div>
-    </section>
-  );
-}
 
-/* ─── CTA ─────────────────────────────────────────────────────── */
-function CTA() {
-  return (
-    <section id="contact" className="py-24 bg-[#0B1E4B] relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#00C2C7]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#00C2C7]/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/3" />
-      </div>
-
-      <div className="relative max-w-4xl mx-auto px-6 text-center">
-        <div className="inline-flex items-center gap-2 bg-[#00C2C7]/15 border border-[#00C2C7]/30 text-[#00C2C7] text-sm font-medium px-4 py-2 rounded-full mb-8">
-          Places limitées — Session de juillet 2025
-        </div>
-
-        <h2 className="text-3xl md:text-5xl font-bold text-white mb-6 leading-tight">
-          Prêt(e) à démarrer votre
-          <br />
-          <span className="text-[#00C2C7]">carrière américaine ?</span>
-        </h2>
-
-        <p className="text-lg text-white/70 mb-12 max-w-xl mx-auto leading-relaxed">
-          Rejoignez nos infirmiers francophones qui ont obtenu leur score B et
-          exercent aujourd&apos;hui aux États-Unis.
-        </p>
-
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 md:p-12 backdrop-blur-sm max-w-lg mx-auto">
-          <h3 className="text-white font-semibold text-xl mb-6">
-            Demander un appel de découverte gratuit
-          </h3>
-          <form className="space-y-4" action="#">
-            <input
-              type="text"
-              placeholder="Votre prénom et nom"
-              className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#00C2C7] transition-colors"
-            />
-            <input
-              type="email"
-              placeholder="Votre adresse email"
-              className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#00C2C7] transition-colors"
-            />
-            <select defaultValue="" className="w-full bg-white/10 border border-white/20 text-white/70 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#00C2C7] transition-colors appearance-none">
-              <option value="" disabled>Votre niveau d&apos;anglais actuel</option>
-              <option>Débutant (A2)</option>
-              <option>Intermédiaire (B1)</option>
-              <option>Avancé (B2)</option>
-              <option>Courant (C1+)</option>
-            </select>
-            <button
-              type="submit"
-              className="w-full bg-[#00C2C7] hover:bg-[#009DA1] text-white font-semibold py-4 rounded-xl transition-colors text-base mt-2"
-            >
-              Réserver mon appel gratuit →
-            </button>
-          </form>
-          <p className="text-white/40 text-xs mt-4 text-center">
-            Sans engagement. Réponse sous 24h.
+        <div className="mt-12 bg-[#0B1E4B] rounded-2xl p-8 md:p-10 text-center">
+          <h3 className="text-2xl font-bold text-white mb-3">Prêt(e) à vous lancer ?</h3>
+          <p className="text-white/70 mb-8 max-w-lg mx-auto">
+            Commencez par le test de niveau pour identifier vos points forts et vos axes d&apos;amélioration.
           </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/assessment"
+              className="inline-flex items-center justify-center gap-2 bg-[#00C2C7] hover:bg-[#009DA1] text-white font-semibold px-8 py-4 rounded-full transition-colors"
+            >
+              Faire le test de niveau
+            </Link>
+            <Link
+              href="/mock-exam"
+              className="inline-flex items-center justify-center gap-2 border border-white/30 text-white hover:border-white/60 font-semibold px-8 py-4 rounded-full transition-colors"
+            >
+              Tenter un examen blanc
+            </Link>
+          </div>
         </div>
       </div>
     </section>

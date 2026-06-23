@@ -417,7 +417,7 @@ export default function SpeakingClient() {
               ← Vocabulaire médical
             </Link>
             <Link
-              href="/#contact"
+              href="/mock-exam"
               className="flex-1 text-center bg-[#00C2C7] hover:bg-[#009DA1] text-white font-semibold py-3.5 rounded-xl transition-colors text-sm"
             >
               Démarrer ma formation →

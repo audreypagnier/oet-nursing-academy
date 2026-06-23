@@ -638,7 +638,7 @@ export default function AssessmentClient() {
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3">
             <Link
-              href="/#contact"
+              href="/daily-practice"
               className="flex-1 text-center bg-[#00C2C7] hover:bg-[#009DA1] text-white font-semibold py-4 rounded-xl transition-colors"
             >
               Démarrer ma formation →
