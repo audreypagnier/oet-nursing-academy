@@ -1,12 +1,15 @@
 /* ─── OET Readiness Score ─────────────────────────────────────
  *
- * Estimated readiness based on four signals stored in localStorage:
- *   - Assessment score      → 50 pts  (core English level)
- *   - Vocabulary learned    → 20 pts  (30 cards total)
- *   - Speaking practiced    → 15 pts  (5 scenarios)
- *   - Writing completed     → 15 pts  (5 letters)
+ * Estimated readiness based on signals stored in localStorage:
  *
- * Total: 0 – 100. This is NOT an official OET score.
+ *   Assessment score        50 pts   (core English level)
+ *   Vocabulary learned      15 pts   (30 cards)
+ *   Speaking practiced      10 pts   (5 scenarios)
+ *   Listening completed     10 pts   (10 scenarios)
+ *   Writing completion       5 pts   (5 letters in target word count)
+ *   Writing self-evaluation 10 pts   (6-criteria self-eval, avg across letters)
+ *
+ *   Total: 0 – 100. NOT an official OET score.
  */
 
 export type ReadinessLevel = {
@@ -23,13 +26,25 @@ export type ReadinessLevel = {
 export type ReadinessData = {
   score: number;
   breakdown: {
-    assessment: number;
-    vocabulary: number;
-    speaking: number;
-    writing: number;
+    assessment: number;      // max 50
+    vocabulary: number;      // max 15
+    speaking: number;        // max 10
+    listening: number;       // max 10
+    writingCompletion: number; // max 5
+    writingEval: number;     // max 10
+    writing: number;         // = writingCompletion + writingEval (max 15)
   };
   level: ReadinessLevel;
 };
+
+export const SCORE_EXPLANATION = [
+  { label: "Évaluation de niveau",     max: 50,  note: "Basé sur votre score au test de niveau initial" },
+  { label: "Vocabulaire médical",       max: 15,  note: "30 fiches à apprendre" },
+  { label: "Speaking",                  max: 10,  note: "5 scénarios de consultation" },
+  { label: "Listening",                 max: 10,  note: "10 scénarios cliniques" },
+  { label: "Writing — lettres rédigées",max:  5,  note: "5 lettres dans la plage 180–200 mots" },
+  { label: "Writing — auto-évaluation", max: 10,  note: "Qualité moyenne sur 6 critères OET" },
+] as const;
 
 const READINESS_LEVELS: Record<string, ReadinessLevel> = {
   "not-ready": {
@@ -48,9 +63,9 @@ const READINESS_LEVELS: Record<string, ReadinessLevel> = {
     ],
     targetScores: [
       { skill: "Listening", target: "350+", note: "Score B minimum requis" },
-      { skill: "Reading", target: "350+", note: "Score B minimum requis" },
-      { skill: "Speaking", target: "350+", note: "Score B minimum requis" },
-      { skill: "Writing", target: "300+", note: "Minimum — viser 350+ idéalement" },
+      { skill: "Reading",   target: "350+", note: "Score B minimum requis" },
+      { skill: "Speaking",  target: "350+", note: "Score B minimum requis" },
+      { skill: "Writing",   target: "300+", note: "Minimum — viser 350+ idéalement" },
     ],
   },
   "foundation": {
@@ -69,9 +84,9 @@ const READINESS_LEVELS: Record<string, ReadinessLevel> = {
     ],
     targetScores: [
       { skill: "Listening", target: "350+", note: "Score B minimum requis" },
-      { skill: "Reading", target: "350+", note: "Score B minimum requis" },
-      { skill: "Speaking", target: "350+", note: "Score B minimum requis" },
-      { skill: "Writing", target: "300+", note: "Minimum — viser 350+ idéalement" },
+      { skill: "Reading",   target: "350+", note: "Score B minimum requis" },
+      { skill: "Speaking",  target: "350+", note: "Score B minimum requis" },
+      { skill: "Writing",   target: "300+", note: "Minimum — viser 350+ idéalement" },
     ],
   },
   "almost-ready": {
@@ -90,9 +105,9 @@ const READINESS_LEVELS: Record<string, ReadinessLevel> = {
     ],
     targetScores: [
       { skill: "Listening", target: "350+", note: "Score B minimum requis" },
-      { skill: "Reading", target: "350+", note: "Score B minimum requis" },
-      { skill: "Speaking", target: "350+", note: "Score B minimum requis" },
-      { skill: "Writing", target: "350+", note: "Viser 350+ idéalement" },
+      { skill: "Reading",   target: "350+", note: "Score B minimum requis" },
+      { skill: "Speaking",  target: "350+", note: "Score B minimum requis" },
+      { skill: "Writing",   target: "350+", note: "Viser 350+ idéalement" },
     ],
   },
   "oet-ready": {
@@ -111,9 +126,9 @@ const READINESS_LEVELS: Record<string, ReadinessLevel> = {
     ],
     targetScores: [
       { skill: "Listening", target: "350+", note: "Score B minimum requis" },
-      { skill: "Reading", target: "350+", note: "Score B minimum requis" },
-      { skill: "Speaking", target: "350+", note: "Score B minimum requis" },
-      { skill: "Writing", target: "350+", note: "Viser 350+ idéalement" },
+      { skill: "Reading",   target: "350+", note: "Score B minimum requis" },
+      { skill: "Speaking",  target: "350+", note: "Score B minimum requis" },
+      { skill: "Writing",   target: "350+", note: "Viser 350+ idéalement" },
     ],
   },
   "strong-candidate": {
@@ -132,9 +147,9 @@ const READINESS_LEVELS: Record<string, ReadinessLevel> = {
     ],
     targetScores: [
       { skill: "Listening", target: "350–450+", note: "Viser grade A" },
-      { skill: "Reading", target: "350–450+", note: "Viser grade A" },
-      { skill: "Speaking", target: "350+", note: "Score B minimum requis" },
-      { skill: "Writing", target: "350+", note: "Score B minimum requis" },
+      { skill: "Reading",   target: "350–450+", note: "Viser grade A" },
+      { skill: "Speaking",  target: "350+",     note: "Score B minimum requis" },
+      { skill: "Writing",   target: "350+",     note: "Score B minimum requis" },
     ],
   },
 };
@@ -148,7 +163,7 @@ function getLevelKey(score: number): string {
 }
 
 export function computeReadiness(): ReadinessData {
-  // Assessment (max 50 pts)
+  // Assessment — max 50 pts
   let assessmentPts = 0;
   try {
     const raw = localStorage.getItem("oet_assessment_result");
@@ -158,43 +173,87 @@ export function computeReadiness(): ReadinessData {
     }
   } catch {}
 
-  // Vocabulary (max 20 pts — 30 cards total)
+  // Vocabulary — max 15 pts (30 cards)
   let vocabPts = 0;
   try {
     const raw = localStorage.getItem("oet_vocabulary_learned");
     if (raw) {
       const ids = JSON.parse(raw) as string[];
-      vocabPts = Math.round(Math.min(ids.length, 30) / 30 * 20);
+      vocabPts = Math.round(Math.min(ids.length, 30) / 30 * 15);
     }
   } catch {}
 
-  // Speaking (max 15 pts — 5 scenarios)
+  // Speaking — max 10 pts (5 scenarios)
   let speakingPts = 0;
   try {
     const raw = localStorage.getItem("oet_speaking_practiced");
     if (raw) {
       const ids = JSON.parse(raw) as string[];
-      speakingPts = Math.round(Math.min(ids.length, 5) / 5 * 15);
+      speakingPts = Math.round(Math.min(ids.length, 5) / 5 * 10);
     }
   } catch {}
 
-  // Writing (max 15 pts — 5 letters)
-  let writingPts = 0;
+  // Listening — max 10 pts (10 scenarios)
+  let listeningPts = 0;
+  try {
+    const raw = localStorage.getItem("oet_listening_completed");
+    if (raw) {
+      const parsed = JSON.parse(raw) as { completed: string[] };
+      const count = (parsed.completed ?? []).length;
+      listeningPts = Math.round(Math.min(count, 10) / 10 * 10);
+    }
+  } catch {}
+
+  // Writing completion — max 5 pts (5 letters in word-count target)
+  let writingCompletionPts = 0;
   try {
     const raw = localStorage.getItem("oet_writing_completed");
     if (raw) {
       const ids = JSON.parse(raw) as string[];
-      writingPts = Math.round(Math.min(ids.length, 5) / 5 * 15);
+      writingCompletionPts = Math.round(Math.min(ids.length, 5) / 5 * 5);
     }
   } catch {}
 
-  const total = assessmentPts + vocabPts + speakingPts + writingPts;
+  // Writing self-evaluation — max 10 pts
+  // Each letter has 6 criteria rated: needs-work=0, acceptable=1, good=2
+  // Max per letter = 6×2 = 12. Average across letters with evals → scale to 10 pts.
+  let writingEvalPts = 0;
+  try {
+    const rawEvals = localStorage.getItem("oet_writing_evals");
+    const rawCompleted = localStorage.getItem("oet_writing_completed");
+    if (rawEvals && rawCompleted) {
+      const evals = JSON.parse(rawEvals) as Record<string, Record<string, string>>;
+      const completed = JSON.parse(rawCompleted) as string[];
+      const RATING_SCORE: Record<string, number> = { "needs-work": 0, "acceptable": 1, "good": 2 };
+      const CATEGORIES = ["purpose", "clinical", "organisation", "tone", "grammar", "wordcount"];
+      const scores: number[] = [];
+      for (const id of completed) {
+        const ev = evals[id];
+        if (!ev) continue;
+        const filled = CATEGORIES.filter((c) => ev[c]);
+        if (filled.length === 0) continue;
+        const sum = filled.reduce((s, c) => s + (RATING_SCORE[ev[c]] ?? 0), 0);
+        scores.push(sum / (filled.length * 2)); // 0–1
+      }
+      if (scores.length > 0) {
+        const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+        writingEvalPts = Math.round(avg * 10);
+      }
+    }
+  } catch {}
+
+  const writingPts = writingCompletionPts + writingEvalPts;
+  const total = assessmentPts + vocabPts + speakingPts + listeningPts + writingPts;
+
   return {
     score: total,
     breakdown: {
       assessment: assessmentPts,
       vocabulary: vocabPts,
       speaking: speakingPts,
+      listening: listeningPts,
+      writingCompletion: writingCompletionPts,
+      writingEval: writingEvalPts,
       writing: writingPts,
     },
     level: READINESS_LEVELS[getLevelKey(total)],

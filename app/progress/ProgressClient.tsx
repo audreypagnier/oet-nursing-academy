@@ -31,13 +31,14 @@ type ProgressData = {
   readingCount: number;
   speakingCount: number;
   writingCount: number;
+  listeningCount: number;
   dailyCompleted: number;
   mockResult: MockResult | null;
 };
 
 /* ─── Helpers ─────────────────────────────────────────────────── */
 
-const TOTALS = { vocab: 30, reading: 10, speaking: 5, writing: 5, daily: 4 };
+const TOTALS = { vocab: 30, reading: 10, speaking: 5, writing: 5, listening: 10, daily: 4 };
 
 function todayKey() {
   return `oet_daily_practice_${new Date().toISOString().slice(0, 10)}`;
@@ -88,13 +89,22 @@ function loadProgress(): ProgressData {
     if (r) dailyCompleted = Math.min((JSON.parse(r) as string[]).length, TOTALS.daily);
   } catch {}
 
+  let listeningCount = 0;
+  try {
+    const r = localStorage.getItem("oet_listening_completed");
+    if (r) {
+      const parsed = JSON.parse(r) as { completed: string[] };
+      listeningCount = Math.min((parsed.completed ?? []).length, TOTALS.listening);
+    }
+  } catch {}
+
   let mockResult: MockResult | null = null;
   try {
     const r = localStorage.getItem("oet_mock_exam_result");
     if (r) mockResult = JSON.parse(r);
   } catch {}
 
-  return { readiness, assessment, vocabCount, readingCount, speakingCount, writingCount, dailyCompleted, mockResult };
+  return { readiness, assessment, vocabCount, readingCount, speakingCount, writingCount, listeningCount, dailyCompleted, mockResult };
 }
 
 function oetLevelFromScore(score: number): string {
@@ -187,7 +197,7 @@ export default function ProgressClient() {
     );
   }
 
-  const { readiness, assessment, vocabCount, readingCount, speakingCount, writingCount, dailyCompleted, mockResult } = data;
+  const { readiness, assessment, vocabCount, readingCount, speakingCount, writingCount, listeningCount, dailyCompleted, mockResult } = data;
   const { score, level } = readiness;
 
   const barColor = score >= 75 ? "#00C2C7" : score >= 60 ? "#f59e0b" : score >= 40 ? "#f97316" : "#ef4444";
@@ -225,10 +235,18 @@ export default function ProgressClient() {
       href: "/writing",
       color: "#7C3AED",
     },
+    {
+      label: "Listening",
+      icon: "🎧",
+      count: listeningCount,
+      total: TOTALS.listening,
+      href: "/listening",
+      color: "#059669",
+    },
   ];
 
-  const totalActivities = TOTALS.vocab + TOTALS.reading + TOTALS.speaking + TOTALS.writing;
-  const completedActivities = vocabCount + readingCount + speakingCount + writingCount;
+  const totalActivities = TOTALS.vocab + TOTALS.reading + TOTALS.speaking + TOTALS.writing + TOTALS.listening;
+  const completedActivities = vocabCount + readingCount + speakingCount + writingCount + listeningCount;
   const overallPct = Math.round((completedActivities / totalActivities) * 100);
 
   return (
@@ -265,8 +283,9 @@ export default function ProgressClient() {
           <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-2.5">
             {[
               { label: "Évaluation", pts: readiness.breakdown.assessment, max: 50 },
-              { label: "Vocabulaire", pts: readiness.breakdown.vocabulary, max: 20 },
-              { label: "Speaking", pts: readiness.breakdown.speaking, max: 15 },
+              { label: "Vocabulaire", pts: readiness.breakdown.vocabulary, max: 15 },
+              { label: "Speaking", pts: readiness.breakdown.speaking, max: 10 },
+              { label: "Listening", pts: readiness.breakdown.listening, max: 10 },
               { label: "Writing", pts: readiness.breakdown.writing, max: 15 },
             ].map((b) => (
               <div key={b.label}>

@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { computeReadiness, type ReadinessData } from "../lib/readiness";
+import { computeReadiness, type ReadinessData, SCORE_EXPLANATION } from "../lib/readiness";
 
 /* ─── Derived analysis ────────────────────────────────────────── */
 
 type Signal = {
-  key: "assessment" | "vocabulary" | "speaking" | "writing";
+  key: string;
   label: string;
   pts: number;
   max: number;
@@ -40,7 +40,7 @@ function analyse(data: ReadinessData): {
       key: "vocabulary",
       label: "Vocabulaire médical",
       pts: breakdown.vocabulary,
-      max: 20,
+      max: 15,
       href: "/vocabulary",
       actionLabel: "Apprendre les fiches",
     },
@@ -48,9 +48,17 @@ function analyse(data: ReadinessData): {
       key: "speaking",
       label: "Speaking — jeux de rôle",
       pts: breakdown.speaking,
-      max: 15,
+      max: 10,
       href: "/speaking",
       actionLabel: "Pratiquer les scénarios",
+    },
+    {
+      key: "listening",
+      label: "Listening — scénarios cliniques",
+      pts: breakdown.listening,
+      max: 10,
+      href: "/listening",
+      actionLabel: "Écouter les scénarios",
     },
     {
       key: "writing",
@@ -82,7 +90,7 @@ function analyse(data: ReadinessData): {
   }
 
   // Vocabulary
-  const vocabPct = breakdown.vocabulary / 20;
+  const vocabPct = breakdown.vocabulary / 15;
   if (vocabPct >= 0.7) {
     strengths.push({
       label: "Vocabulaire médical bien couvert",
@@ -98,7 +106,7 @@ function analyse(data: ReadinessData): {
   }
 
   // Speaking
-  const speakPct = breakdown.speaking / 15;
+  const speakPct = breakdown.speaking / 10;
   if (speakPct >= 0.6) {
     strengths.push({
       label: "Bonne pratique du Speaking",
@@ -113,17 +121,41 @@ function analyse(data: ReadinessData): {
     });
   }
 
+  // Listening
+  const listenPct = breakdown.listening / 10;
+  if (listenPct >= 0.6) {
+    strengths.push({
+      label: "Bonne pratique du Listening",
+      detail: `Vous avez complété ${Math.round(listenPct * 10)}/10 scénarios cliniques. Cette pratique renforce la compréhension orale médicale.`,
+    });
+  } else {
+    weaknesses.push({
+      label: "Listening peu pratiqué",
+      detail: `${Math.round(listenPct * 10)}/10 scénarios complétés. Le Listening OET requiert une exposition régulière à l'anglais clinique oral.`,
+      href: "/listening",
+      action: "S'entraîner au Listening",
+    });
+  }
+
   // Writing
-  const writePct = breakdown.writing / 15;
-  if (writePct >= 0.6) {
+  const completionPct = breakdown.writingCompletion / 5;
+  const evalPct = breakdown.writingEval / 10;
+  if (completionPct >= 0.6 && evalPct >= 0.5) {
     strengths.push({
       label: "Bonne maîtrise du Writing",
-      detail: `Vous avez rédigé ${Math.round(writePct * 5)}/5 lettres de référence. La structure OET est acquise.`,
+      detail: `Vous avez rédigé ${Math.round(completionPct * 5)}/5 lettres et votre auto-évaluation est encourageante. La structure OET est acquise.`,
+    });
+  } else if (completionPct >= 0.6) {
+    weaknesses.push({
+      label: "Writing — auto-évaluation à compléter",
+      detail: `Vous avez rédigé ${Math.round(completionPct * 5)}/5 lettres. Complétez l'auto-évaluation par critères pour renforcer la qualité de vos lettres.`,
+      href: "/writing",
+      action: "Évaluer mes lettres",
     });
   } else {
     weaknesses.push({
       label: "Writing insuffisamment pratiqué",
-      detail: `${Math.round(writePct * 5)}/5 lettres rédigées. Le Writing est souvent la compétence la plus discriminante à l'OET.`,
+      detail: `${Math.round(completionPct * 5)}/5 lettres rédigées. Le Writing est souvent la compétence la plus discriminante à l'OET.`,
       href: "/writing",
       action: "Rédiger une lettre",
     });
@@ -390,6 +422,28 @@ export default function ReadinessClient() {
               <p className="text-2xl font-bold text-[#00C2C7] mb-2">{timeline}</p>
               <p className="text-sm text-white/70 leading-relaxed">{timelineDetail}</p>
             </div>
+          </div>
+        </div>
+
+        {/* Scoring explanation */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-5">
+          <h2 className="font-semibold text-[#0B1E4B] mb-1">Comment ce score est calculé</h2>
+          <p className="text-xs text-gray-400 mb-4">Total sur 100 points — basé uniquement sur votre activité sur cette plateforme</p>
+          <div className="space-y-2">
+            {SCORE_EXPLANATION.map((item) => (
+              <div key={item.label} className="flex items-center gap-3">
+                <div className="w-8 text-right flex-shrink-0">
+                  <span className="text-xs font-bold text-[#0B1E4B]">{item.max}</span>
+                  <span className="text-[10px] text-gray-400"> pts</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-0.5">
+                    <div className="h-full rounded-full bg-[#00C2C7]/40" style={{ width: `${(item.max / 100) * 100}%` }} />
+                  </div>
+                  <p className="text-xs text-gray-600 truncate">{item.label} <span className="text-gray-400">— {item.note}</span></p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

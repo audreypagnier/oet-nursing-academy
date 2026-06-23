@@ -267,8 +267,9 @@ function ReadinessCard({ readiness }: { readiness: ReadinessData }) {
   const { score, breakdown, level } = readiness;
   const breakdownItems = [
     { label: "Évaluation", pts: breakdown.assessment, max: 50 },
-    { label: "Vocabulaire", pts: breakdown.vocabulary, max: 20 },
-    { label: "Speaking", pts: breakdown.speaking, max: 15 },
+    { label: "Vocabulaire", pts: breakdown.vocabulary, max: 15 },
+    { label: "Speaking", pts: breakdown.speaking, max: 10 },
+    { label: "Listening", pts: breakdown.listening, max: 10 },
     { label: "Writing", pts: breakdown.writing, max: 15 },
   ];
 
