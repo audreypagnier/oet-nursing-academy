@@ -271,9 +271,13 @@ function PlanTaskCard({ task, done, index }: { task: DailyTask; done: boolean; i
 
 export default function DailyPracticeClient() {
   const { user, loading: authLoading } = useAuth();
+  console.log("[OET Daily] render — authLoading:", authLoading, "| userId:", user?.id ?? "none");
   // Stable ref so fire-and-forget callbacks always see the latest user ID
   const userIdRef = useRef<string | null>(null);
-  useEffect(() => { userIdRef.current = user?.id ?? null; }, [user?.id]);
+  useEffect(() => {
+    console.log("[OET Daily] userIdRef updated:", user?.id ?? "null");
+    userIdRef.current = user?.id ?? null;
+  }, [user?.id]);
 
   const [hydrated,      setHydrated]      = useState(false);
   const [view,          setView]          = useState<View>("plan");
@@ -347,22 +351,33 @@ export default function DailyPracticeClient() {
 
   // ── Supabase sync: runs once auth resolves for a logged-in user ──
   useEffect(() => {
+    console.log("[OET Daily] sync effect — authLoading:", authLoading, "| userId:", user?.id ?? "none");
     if (authLoading || !user) return;
 
     const days = getLast7Days();
     const dates = days.map(d => d.key.replace("oet_daily_practice_", ""));
+    const todayDate = dates[dates.length - 1];
+
+    console.log("[OET Daily] fetching remote progress — userId:", user.id, "| todayDate:", todayDate);
 
     fetchRemoteDailyProgress(user.id, dates).then(remote => {
+      console.log("[OET Daily] remote data received:", remote);
+
       // Merge today's remote tasks into local state
-      const todayDate = dates[dates.length - 1];
       const remoteTodayIds = remote[todayDate] ?? [];
+      console.log("[OET Daily] remote today IDs:", remoteTodayIds);
+
       if (remoteTodayIds.length > 0) {
         setCompleted(prev => {
           const merged = new Set([...prev, ...remoteTodayIds]);
+          console.log("[OET Daily] merged completed:", [...merged]);
           try { localStorage.setItem(STORAGE_KEY(TODAY_DATE), JSON.stringify([...merged])); } catch {}
           return merged;
         });
+      } else {
+        console.log("[OET Daily] no remote tasks for today — keeping local state");
       }
+
       // Update week calendar with any remote days that have data
       setWeekCompleted(prev => {
         const next = [...prev];
@@ -371,7 +386,9 @@ export default function DailyPracticeClient() {
         });
         return next;
       });
-    }).catch(() => {});
+    }).catch(err => {
+      console.error("[OET Daily] sync fetch threw:", err);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id]);
 
@@ -381,6 +398,7 @@ export default function DailyPracticeClient() {
   const required      = plan.filter(t => t.required);
   const optional      = plan.filter(t => !t.required);
   const doneTodayCount  = required.filter(t => completed.has(t.id)).length;
+  console.log("[OET Daily] counter — completed:", [...completed], "| required IDs:", required.map(t => t.id), "| doneTodayCount:", doneTodayCount);
   const allRequiredDone = doneTodayCount === required.length && required.length > 0;
   const totalRequired   = required.reduce((s, t) => s + t.duration, 0);
   const doneMinutes     = required.filter(t => completed.has(t.id)).reduce((s, t) => s + t.duration, 0);
@@ -389,6 +407,7 @@ export default function DailyPracticeClient() {
   /* ── Actions ── */
 
   function save(next: Set<string>) {
+    console.log("[OET Daily] save() — taskIds:", [...next], "| userId:", userIdRef.current ?? "not logged in");
     // Update state immediately — counter reflects change at once
     setCompleted(next);
     // Always persist to localStorage (works for logged-out users too)
@@ -396,7 +415,11 @@ export default function DailyPracticeClient() {
     setWeekCompleted(prev => { const n = [...prev]; n[6] = next.size > 0; return n; });
     // Fire-and-forget push to Supabase for logged-in users
     if (userIdRef.current) {
-      pushDailyProgress(userIdRef.current, TODAY_DATE, [...next]).catch(() => {});
+      pushDailyProgress(userIdRef.current, TODAY_DATE, [...next]).catch(err => {
+        console.error("[OET Daily] push threw:", err);
+      });
+    } else {
+      console.log("[OET Daily] save() — skipping Supabase push (no user)");
     }
   }
 
