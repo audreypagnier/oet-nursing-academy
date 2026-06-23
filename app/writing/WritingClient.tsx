@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import {
+  evaluateWriting,
+  AI_EVAL_STORAGE_KEY,
+  BREAKDOWN_LABELS,
+  GRADE_COLOR,
+  type AIWritingEval,
+} from "../lib/writingEvaluator";
 
 /* ─── Data ────────────────────────────────────────────────────── */
 
@@ -185,6 +192,7 @@ Ward Nurse, Respiratory Unit`,
 const STORAGE_KEY  = "oet_writing_completed";
 const DRAFT_KEY    = "oet_writing_drafts";
 const EVAL_KEY     = "oet_writing_evals";
+const AI_EVAL_KEY  = AI_EVAL_STORAGE_KEY;
 const MIN_WORDS    = 180;
 const MAX_WORDS    = 200;
 
@@ -416,6 +424,232 @@ function completionLabel(n: number): { label: string; pct: number } {
   return { label: `${n} mots — trop long (max ${MAX_WORDS})`, pct: 100 };
 }
 
+/* ─── AI Evaluation Panel ────────────────────────────────────── */
+
+function AIEvalPanel({
+  scenario,
+  draft,
+  initialEval,
+  onSave,
+}: {
+  scenario: { id: string; patientSummary: string; task: string };
+  draft: string;
+  initialEval: AIWritingEval | null;
+  onSave: (id: string, eval_: AIWritingEval) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<AIWritingEval | null>(initialEval);
+  const [error, setError] = useState<string | null>(null);
+  const [unconfigured, setUnconfigured] = useState(false);
+  const [showImproved, setShowImproved] = useState(false);
+
+  async function handleEvaluate() {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    setUnconfigured(false);
+    try {
+      const res = await evaluateWriting({
+        scenarioId: scenario.id,
+        patientNotes: scenario.patientSummary,
+        task: scenario.task,
+        draft,
+      });
+      if (!res.configured) {
+        setUnconfigured(true);
+      } else if ("error" in res) {
+        setError(res.error);
+      } else {
+        setResult(res.result);
+        onSave(scenario.id, res.result);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur inattendue");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const wordCount = draft.trim() === "" ? 0 : draft.trim().split(/\s+/).length;
+  const canEvaluate = wordCount >= 50;
+
+  return (
+    <div className="space-y-3">
+      {/* Trigger button */}
+      <button
+        onClick={handleEvaluate}
+        disabled={loading || !canEvaluate}
+        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all border-2 ${
+          loading
+            ? "border-[#00C2C7]/40 bg-[#00C2C7]/10 text-[#009DA1] cursor-wait"
+            : !canEvaluate
+            ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+            : result
+            ? "border-[#0B1E4B]/30 bg-white text-[#0B1E4B] hover:bg-[#0B1E4B]/5"
+            : "border-[#00C2C7] bg-[#00C2C7] text-white hover:bg-[#009DA1]"
+        }`}
+        title={!canEvaluate ? "Écrivez au moins 50 mots avant d'analyser" : undefined}
+      >
+        {loading ? (
+          <>
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Analyse en cours…
+          </>
+        ) : (
+          <>
+            <span>🤖</span>
+            {result ? "Ré-analyser ma lettre" : "Analyser ma lettre"}
+          </>
+        )}
+      </button>
+
+      {/* Unconfigured placeholder */}
+      {unconfigured && (
+        <div className="border border-amber-200 bg-amber-50 rounded-2xl p-5">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl flex-shrink-0">🔑</span>
+            <div>
+              <p className="text-sm font-semibold text-amber-800 mb-1">Clé API non configurée</p>
+              <p className="text-xs text-amber-700 leading-relaxed mb-3">
+                L'évaluation AI nécessite une clé API Anthropic. Ajoutez <code className="bg-amber-100 px-1 rounded">ANTHROPIC_API_KEY</code> dans votre fichier <code className="bg-amber-100 px-1 rounded">.env.local</code> pour activer cette fonctionnalité.
+              </p>
+              <p className="text-xs text-amber-600">
+                En attendant, utilisez l'auto-évaluation par critères ci-dessus pour estimer votre niveau.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="border border-red-200 bg-red-50 rounded-xl px-4 py-3">
+          <p className="text-xs text-red-600"><strong>Erreur :</strong> {error}</p>
+        </div>
+      )}
+
+      {/* Results */}
+      {result && (
+        <div className="border border-gray-200 rounded-2xl overflow-hidden">
+          {/* Grade header */}
+          <div className={`px-6 py-5 flex items-center justify-between ${GRADE_COLOR[result.grade].bg} border-b ${GRADE_COLOR[result.grade].border}`}>
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${result.grade === "A" ? "text-white/60" : "text-gray-400"}`}>
+                Évaluation AI OET Writing
+              </p>
+              <p className={`text-2xl font-bold ${GRADE_COLOR[result.grade].text}`}>
+                Grade {result.grade}
+              </p>
+              <p className={`text-xs mt-0.5 ${result.grade === "A" ? "text-white/70" : "text-gray-500"}`}>
+                {new Date(result.evaluatedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black flex-shrink-0 ${
+              result.grade === "A" ? "bg-white/15 text-white" : `${GRADE_COLOR[result.grade].bg} ${GRADE_COLOR[result.grade].text} border ${GRADE_COLOR[result.grade].border}`
+            }`}>
+              {result.grade}
+            </div>
+          </div>
+
+          {/* Score breakdown */}
+          <div className="px-6 py-5 border-b border-gray-100">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Détail par critère</p>
+            <div className="space-y-3">
+              {(Object.entries(result.breakdown) as [keyof typeof BREAKDOWN_LABELS, number][]).map(([key, score]) => (
+                <div key={key}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-600">{BREAKDOWN_LABELS[key]}</span>
+                    <span className={`font-bold ${score >= 8 ? "text-green-600" : score >= 6 ? "text-[#009DA1]" : score >= 4 ? "text-amber-600" : "text-red-500"}`}>
+                      {score}/10
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${score * 10}%`,
+                        background: score >= 8 ? "#22c55e" : score >= 6 ? "#00C2C7" : score >= 4 ? "#f59e0b" : "#ef4444",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Strengths */}
+          {result.strengths.length > 0 && (
+            <div className="px-6 py-5 border-b border-gray-100">
+              <p className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">✓ Points forts</p>
+              <ul className="space-y-2">
+                {result.strengths.map((s, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="text-green-500 mt-0.5 flex-shrink-0">•</span>
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Improvements */}
+          {result.improvements.length > 0 && (
+            <div className="px-6 py-5 border-b border-gray-100">
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">↗ À améliorer</p>
+              <ul className="space-y-2">
+                {result.improvements.map((s, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="text-amber-500 mt-0.5 flex-shrink-0">•</span>
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Grammar mistakes */}
+          {result.grammarMistakes.length > 0 && (
+            <div className="px-6 py-5 border-b border-gray-100">
+              <p className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-3">⚠ Erreurs de langue</p>
+              <div className="space-y-3">
+                {result.grammarMistakes.map((m, i) => (
+                  <div key={i} className="bg-red-50 border border-red-100 rounded-xl p-3 text-sm">
+                    <p className="line-through text-red-400 mb-1">{m.original}</p>
+                    <p className="text-green-700 font-medium mb-1">→ {m.correction}</p>
+                    <p className="text-xs text-gray-500">{m.explanation}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Improved version */}
+          <div className="px-6 py-5">
+            <button
+              onClick={() => setShowImproved((v) => !v)}
+              className="w-full flex items-center justify-between text-sm font-medium text-[#0B1E4B] py-1"
+            >
+              <span>Voir la version améliorée suggérée</span>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${showImproved ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showImproved && (
+              <div className="mt-3 border border-[#00C2C7]/30 bg-[#00C2C7]/5 rounded-xl p-4">
+                <p className="text-xs font-semibold text-[#009DA1] uppercase tracking-wider mb-3">Version améliorée</p>
+                <pre className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-sans">{result.improvedVersion}</pre>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── WritingArea component ───────────────────────────────────── */
 
 function WritingArea({
@@ -503,6 +737,7 @@ export default function WritingClient() {
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [evals, setEvals] = useState<Record<string, EvalState>>({});
+  const [aiEvals, setAiEvals] = useState<Record<string, AIWritingEval>>({});
   const [hydrated, setHydrated] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(SCENARIOS[0].id);
   const [shownAnswers, setShownAnswers] = useState<Set<string>>(new Set());
@@ -515,6 +750,8 @@ export default function WritingClient() {
       if (rawDrafts) setDrafts(JSON.parse(rawDrafts) as Record<string, string>);
       const rawEvals = localStorage.getItem(EVAL_KEY);
       if (rawEvals) setEvals(JSON.parse(rawEvals) as Record<string, EvalState>);
+      const rawAiEvals = localStorage.getItem(AI_EVAL_KEY);
+      if (rawAiEvals) setAiEvals(JSON.parse(rawAiEvals) as Record<string, AIWritingEval>);
     } catch {}
     setHydrated(true);
   }, []);
@@ -531,6 +768,14 @@ export default function WritingClient() {
     setEvals((prev) => {
       const next = { ...prev, [id]: eval_ };
       try { localStorage.setItem(EVAL_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  function saveAiEval(id: string, eval_: AIWritingEval) {
+    setAiEvals((prev) => {
+      const next = { ...prev, [id]: eval_ };
+      try { localStorage.setItem(AI_EVAL_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
   }
@@ -613,6 +858,7 @@ export default function WritingClient() {
               const isExpanded = expanded === scenario.id;
               const isAnswerShown = shownAnswers.has(scenario.id);
               const draft = drafts[scenario.id] ?? "";
+              const aiEval = aiEvals[scenario.id] ?? null;
               const wc = countWords(draft);
               const inTarget = wc >= MIN_WORDS && wc <= MAX_WORDS;
               const evalState = evals[scenario.id] ?? {};
@@ -715,6 +961,19 @@ export default function WritingClient() {
                           scenarioId={scenario.id}
                           initialDraft={draft}
                           onDraftChange={saveDraft}
+                        />
+                      </div>
+
+                      {/* AI Evaluation */}
+                      <div className="mb-5">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                          Évaluation AI
+                        </p>
+                        <AIEvalPanel
+                          scenario={scenario}
+                          draft={draft}
+                          initialEval={aiEval}
+                          onSave={saveAiEval}
                         />
                       </div>
 

@@ -32,6 +32,7 @@ type ProgressData = {
   speakingCount: number;
   writingCount: number;
   listeningCount: number;
+  writingAiGrades: string[];   // AI-evaluated letter grades e.g. ["A","B"]
   dailyCompleted: number;
   mockResult: MockResult | null;
 };
@@ -98,13 +99,24 @@ function loadProgress(): ProgressData {
     }
   } catch {}
 
+  let writingAiGrades: string[] = [];
+  try {
+    const rawAi = localStorage.getItem("oet_writing_ai_evals");
+    const rawCompleted = localStorage.getItem("oet_writing_completed");
+    if (rawAi && rawCompleted) {
+      const aiEvals = JSON.parse(rawAi) as Record<string, { grade: string }>;
+      const completed = JSON.parse(rawCompleted) as string[];
+      writingAiGrades = completed.filter((id) => aiEvals[id]?.grade).map((id) => aiEvals[id].grade);
+    }
+  } catch {}
+
   let mockResult: MockResult | null = null;
   try {
     const r = localStorage.getItem("oet_mock_exam_result");
     if (r) mockResult = JSON.parse(r);
   } catch {}
 
-  return { readiness, assessment, vocabCount, readingCount, speakingCount, writingCount, listeningCount, dailyCompleted, mockResult };
+  return { readiness, assessment, vocabCount, readingCount, speakingCount, writingCount, listeningCount, writingAiGrades, dailyCompleted, mockResult };
 }
 
 function oetLevelFromScore(score: number): string {
@@ -197,7 +209,7 @@ export default function ProgressClient() {
     );
   }
 
-  const { readiness, assessment, vocabCount, readingCount, speakingCount, writingCount, listeningCount, dailyCompleted, mockResult } = data;
+  const { readiness, assessment, vocabCount, readingCount, speakingCount, writingCount, listeningCount, writingAiGrades, dailyCompleted, mockResult } = data;
   const { score, level } = readiness;
 
   const barColor = score >= 75 ? "#00C2C7" : score >= 60 ? "#f59e0b" : score >= 40 ? "#f97316" : "#ef4444";
@@ -362,6 +374,34 @@ export default function ProgressClient() {
             );
           })}
         </div>
+
+        {/* ── Writing AI grades ── */}
+        {writingAiGrades.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🤖</span>
+                <p className="font-semibold text-[#0B1E4B] text-sm">Évaluations AI Writing</p>
+              </div>
+              <span className="text-xs text-gray-400">{writingAiGrades.length} lettre{writingAiGrades.length > 1 ? "s" : ""}</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {writingAiGrades.map((grade, i) => {
+                const colors: Record<string, string> = {
+                  A: "bg-[#0B1E4B] text-white", B: "bg-[#00C2C7]/15 text-[#009DA1] border border-[#00C2C7]/30",
+                  "C+": "bg-yellow-50 text-yellow-700 border border-yellow-200",
+                  C: "bg-orange-50 text-orange-700 border border-orange-200",
+                  D: "bg-red-50 text-red-600 border border-red-200",
+                };
+                return (
+                  <span key={i} className={`text-xs font-bold px-3 py-1.5 rounded-full ${colors[grade] ?? "bg-gray-100 text-gray-500"}`}>
+                    Lettre {i + 1} — Grade {grade}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── Daily practice ── */}
         <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4">

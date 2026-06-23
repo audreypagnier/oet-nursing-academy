@@ -214,30 +214,52 @@ export function computeReadiness(): ReadinessData {
     }
   } catch {}
 
-  // Writing self-evaluation — max 10 pts
-  // Each letter has 6 criteria rated: needs-work=0, acceptable=1, good=2
-  // Max per letter = 6×2 = 12. Average across letters with evals → scale to 10 pts.
+  // Writing quality evaluation — max 10 pts
+  // Prefer AI eval score if available; fall back to manual self-eval.
   let writingEvalPts = 0;
   try {
-    const rawEvals = localStorage.getItem("oet_writing_evals");
     const rawCompleted = localStorage.getItem("oet_writing_completed");
-    if (rawEvals && rawCompleted) {
-      const evals = JSON.parse(rawEvals) as Record<string, Record<string, string>>;
-      const completed = JSON.parse(rawCompleted) as string[];
-      const RATING_SCORE: Record<string, number> = { "needs-work": 0, "acceptable": 1, "good": 2 };
-      const CATEGORIES = ["purpose", "clinical", "organisation", "tone", "grammar", "wordcount"];
+    const completed = rawCompleted ? (JSON.parse(rawCompleted) as string[]) : [];
+
+    // Try AI evals first (each letter's breakdown avg scaled to 0–1)
+    const rawAiEvals = localStorage.getItem("oet_writing_ai_evals");
+    if (rawAiEvals && completed.length > 0) {
+      type AIEntry = { breakdown: Record<string, number> };
+      const aiEvals = JSON.parse(rawAiEvals) as Record<string, AIEntry>;
       const scores: number[] = [];
       for (const id of completed) {
-        const ev = evals[id];
-        if (!ev) continue;
-        const filled = CATEGORIES.filter((c) => ev[c]);
-        if (filled.length === 0) continue;
-        const sum = filled.reduce((s, c) => s + (RATING_SCORE[ev[c]] ?? 0), 0);
-        scores.push(sum / (filled.length * 2)); // 0–1
+        const ev = aiEvals[id];
+        if (!ev?.breakdown) continue;
+        const vals = Object.values(ev.breakdown) as number[];
+        if (vals.length === 0) continue;
+        scores.push(vals.reduce((a, b) => a + b, 0) / (vals.length * 10)); // 0–1
       }
       if (scores.length > 0) {
         const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
         writingEvalPts = Math.round(avg * 10);
+      }
+    }
+
+    // Fall back to manual self-eval if no AI scores found
+    if (writingEvalPts === 0) {
+      const rawEvals = localStorage.getItem("oet_writing_evals");
+      if (rawEvals && completed.length > 0) {
+        const evals = JSON.parse(rawEvals) as Record<string, Record<string, string>>;
+        const RATING_SCORE: Record<string, number> = { "needs-work": 0, "acceptable": 1, "good": 2 };
+        const CATEGORIES = ["purpose", "clinical", "organisation", "tone", "grammar", "wordcount"];
+        const scores: number[] = [];
+        for (const id of completed) {
+          const ev = evals[id];
+          if (!ev) continue;
+          const filled = CATEGORIES.filter((c) => ev[c]);
+          if (filled.length === 0) continue;
+          const sum = filled.reduce((s, c) => s + (RATING_SCORE[ev[c]] ?? 0), 0);
+          scores.push(sum / (filled.length * 2)); // 0–1
+        }
+        if (scores.length > 0) {
+          const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+          writingEvalPts = Math.round(avg * 10);
+        }
       }
     }
   } catch {}

@@ -39,6 +39,8 @@ const TASKS_BY_LEVEL: Record<Level, Task[]> = {
       icon: "📄",
       description: "Lisez une note de soins courte et identifiez les informations clés.",
       tip: "Repérez : nom du patient, motif d'admission, traitement en cours. Ignorez les mots inconnus.",
+      href: "/reading",
+      linkLabel: "Ouvrir Reading →",
     },
     {
       id: "speaking",
@@ -79,6 +81,8 @@ const TASKS_BY_LEVEL: Record<Level, Task[]> = {
       icon: "📄",
       description: "Lisez un résumé de dossier patient et répondez mentalement : qui, quoi, depuis quand.",
       tip: "Entraînez-vous à lire rapidement : trouvez les informations clés en moins de 2 minutes.",
+      href: "/reading",
+      linkLabel: "Ouvrir Reading →",
     },
     {
       id: "speaking",
@@ -119,6 +123,8 @@ const TASKS_BY_LEVEL: Record<Level, Task[]> = {
       icon: "📄",
       description: "Lisez un dossier patient complexe et résumez-le oralement en 30 secondes.",
       tip: "Entraînez-vous à extraire l'essentiel rapidement — compétence clé pour l'OET Reading.",
+      href: "/reading",
+      linkLabel: "Ouvrir Reading →",
     },
     {
       id: "speaking",
@@ -159,6 +165,8 @@ const TASKS_BY_LEVEL: Record<Level, Task[]> = {
       icon: "📄",
       description: "Chronométrez-vous : lisez un dossier complet en 3 minutes et répondez à 3 questions.",
       tip: "À ce niveau, la vitesse de lecture est votre principal levier d'amélioration.",
+      href: "/reading",
+      linkLabel: "Ouvrir Reading →",
     },
     {
       id: "speaking",
