@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 /* ─── Types ───────────────────────────────────────────────────── */
@@ -662,18 +662,18 @@ And lastly — your annual checks. Every year you'll need blood tests, a kidney 
 
 /* ─── Score calculation ───────────────────────────────────────── */
 
-function calcScore(correct: number, total: number): { pct: number; grade: string; oet: string } {
+function calcScore(correct: number, total: number): { grade: string; oet: string } {
   const pct = total === 0 ? 0 : Math.round((correct / total) * 100);
-  if (pct >= 90) return { pct, grade: "A", oet: "≥ 400" };
-  if (pct >= 70) return { pct, grade: "B", oet: "350–399" };
-  if (pct >= 50) return { pct, grade: "C", oet: "300–349" };
-  return { pct, grade: "< C", oet: "< 300" };
+  if (pct >= 90) return { grade: "A", oet: "≥ 400" };
+  if (pct >= 70) return { grade: "B", oet: "350–399" };
+  if (pct >= 50) return { grade: "C", oet: "300–349" };
+  return { grade: "< C", oet: "< 300" };
 }
 
 const STORAGE_KEY = "oet_listening_completed";
 const TOTAL = SCENARIOS.length;
 
-/* ─── Component ───────────────────────────────────────────────── */
+/* ─── Main page ───────────────────────────────────────────────── */
 
 export default function ListeningClient() {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -693,7 +693,7 @@ export default function ListeningClient() {
     setHydrated(true);
   }, []);
 
-  function persist(nextCompleted: Set<string>, nextAnswers: Record<string, Record<string, number>>) {
+  function persist(nextCompleted: Set<string>, nextAnswers: Record<string, Record<number, number>>) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ completed: [...nextCompleted], answers: nextAnswers }));
     } catch {}
@@ -705,7 +705,6 @@ export default function ListeningClient() {
       [scenarioId]: { ...(answers[scenarioId] ?? {}), [qIndex]: optionIndex },
     };
     setAnswers(nextAnswers);
-
     const scenario = SCENARIOS.find((s) => s.id === scenarioId)!;
     const allAnswered = scenario.questions.every((_, i) => nextAnswers[scenarioId]?.[i] !== undefined);
     const nextCompleted = new Set(completed);
@@ -715,21 +714,16 @@ export default function ListeningClient() {
   }
 
   const completedCount = hydrated ? completed.size : 0;
-
   const allCorrect = SCENARIOS.reduce((sum, s) => {
     const sc = answers[s.id] ?? {};
     return sum + s.questions.filter((q, i) => sc[i] === q.correct).length;
   }, 0);
-  const totalAnswered = SCENARIOS.reduce((sum, s) => {
-    return sum + Object.keys(answers[s.id] ?? {}).length;
-  }, 0);
+  const totalAnswered = SCENARIOS.reduce((sum, s) => sum + Object.keys(answers[s.id] ?? {}).length, 0);
   const scoreInfo = calcScore(allCorrect, totalAnswered);
-
   const active = SCENARIOS.find((s) => s.id === activeId) ?? null;
 
   return (
     <div className="min-h-screen bg-[#F7F9FC] flex flex-col">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-[#00C2C7] text-xl font-bold">OET</span>
@@ -747,11 +741,11 @@ export default function ListeningClient() {
       <main className="flex-1 flex flex-col items-center px-6 py-10">
         <div className="w-full max-w-2xl">
 
-          {/* Page title + progress */}
+          {/* Title + progress */}
           <div className="mb-8">
             <p className="text-sm text-gray-500 mb-1">Compréhension orale</p>
             <div className="flex items-end justify-between gap-4 mb-4">
-              <h1 className="text-2xl font-bold text-[#0B1E4B]">Listening — Transcriptions cliniques</h1>
+              <h1 className="text-2xl font-bold text-[#0B1E4B]">Listening OET</h1>
               <span className="text-sm font-semibold text-[#0B1E4B] flex-shrink-0">
                 {completedCount} / {TOTAL} complétés
               </span>
@@ -773,18 +767,20 @@ export default function ListeningClient() {
                 }`}>
                   Grade {scoreInfo.grade}
                 </span>
-                <span className="text-xs text-gray-400">OET {scoreInfo.oet} — {allCorrect}/{totalAnswered} réponses correctes</span>
+                <span className="text-xs text-gray-400">OET {scoreInfo.oet} — {allCorrect}/{totalAnswered} correctes</span>
               </div>
             )}
           </div>
 
-          {/* Note on transcript format */}
-          <div className="mb-6 p-4 bg-[#00C2C7]/8 border border-[#00C2C7]/25 rounded-xl flex gap-3 items-start">
-            <span className="text-lg mt-0.5">🎧</span>
-            <p className="text-sm text-[#0B1E4B]/80 leading-relaxed">
-              Ces exercices sont basés sur des <strong>transcriptions</strong> de situations cliniques réelles (transmissions, consultations, éducations thérapeutiques). Lisez chaque transcription attentivement comme si vous l&apos;écoutiez, puis répondez aux questions.
-            </p>
-          </div>
+          {/* Instructions banner */}
+          {!active && (
+            <div className="mb-6 p-4 bg-[#00C2C7]/8 border border-[#00C2C7]/25 rounded-xl flex gap-3 items-start">
+              <span className="text-lg mt-0.5">🎧</span>
+              <p className="text-sm text-[#0B1E4B]/80 leading-relaxed">
+                Écoutez chaque scénario clinique, puis répondez aux 3 questions <strong>sans relire le transcript</strong>. La transcription est révélée après avoir soumis vos réponses.
+              </p>
+            </div>
+          )}
 
           {/* Scenario list */}
           {!active && (
@@ -802,7 +798,6 @@ export default function ListeningClient() {
                       isCompleted ? "border-green-200" : "border-gray-200 hover:border-[#00C2C7]/40"
                     }`}
                   >
-                    {/* Number / check */}
                     <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
                       isCompleted ? "bg-green-100 text-green-600" : "bg-[#0B1E4B]/8 text-[#0B1E4B]"
                     }`}>
@@ -810,15 +805,13 @@ export default function ListeningClient() {
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
-                      ) : (
-                        idx + 1
-                      )}
+                      ) : idx + 1}
                     </div>
-
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.tagColor}`}>{s.tag}</span>
                         <span className="text-xs text-gray-400">{s.type}</span>
+                        <span className="text-xs text-gray-400 flex items-center gap-1">🎧 audio</span>
                       </div>
                       <p className="font-semibold text-[#0B1E4B] text-sm leading-snug">{s.title}</p>
                       {hydrated && answeredCount > 0 && !isCompleted && (
@@ -828,7 +821,6 @@ export default function ListeningClient() {
                         <p className="text-xs text-green-600 font-medium mt-1">{correct}/3 correctes</p>
                       )}
                     </div>
-
                     <svg className="flex-shrink-0 w-4 h-4 text-gray-400 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
@@ -842,7 +834,7 @@ export default function ListeningClient() {
           {active && (
             <ScenarioView
               scenario={active}
-              answers={answers[active.id] ?? {}}
+              savedAnswers={answers[active.id] ?? {}}
               onAnswer={(qi, oi) => handleAnswer(active.id, qi, oi)}
               onBack={() => setActiveId(null)}
             />
@@ -871,21 +863,135 @@ export default function ListeningClient() {
   );
 }
 
-/* ─── ScenarioView ────────────────────────────────────────────── */
+/* ─── Audio player ────────────────────────────────────────────── */
+
+function AudioPlayer({ src }: { src: string }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onLoaded = () => { setDuration(el.duration); setLoaded(true); };
+    const onTime   = () => setCurrentTime(el.currentTime);
+    const onEnded  = () => setPlaying(false);
+    el.addEventListener("loadedmetadata", onLoaded);
+    el.addEventListener("timeupdate", onTime);
+    el.addEventListener("ended", onEnded);
+    return () => {
+      el.removeEventListener("loadedmetadata", onLoaded);
+      el.removeEventListener("timeupdate", onTime);
+      el.removeEventListener("ended", onEnded);
+    };
+  }, [src]);
+
+  function toggle() {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) { el.pause(); setPlaying(false); }
+    else { el.play(); setPlaying(true); }
+  }
+
+  function seek(e: React.ChangeEvent<HTMLInputElement>) {
+    const el = audioRef.current;
+    if (!el) return;
+    const t = Number(e.target.value);
+    el.currentTime = t;
+    setCurrentTime(t);
+  }
+
+  function fmt(s: number) {
+    if (!isFinite(s)) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60).toString().padStart(2, "0");
+    return `${m}:${sec}`;
+  }
+
+  return (
+    <div className="bg-[#0B1E4B] rounded-2xl p-5">
+      <audio ref={audioRef} src={src} preload="metadata" />
+      <div className="flex items-center gap-4">
+        {/* Play/pause */}
+        <button
+          onClick={toggle}
+          aria-label={playing ? "Pause" : "Lire"}
+          className="flex-shrink-0 w-12 h-12 rounded-full bg-[#00C2C7] hover:bg-[#009DA1] flex items-center justify-center transition-colors"
+        >
+          {playing ? (
+            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="4" width="4" height="16" rx="1" />
+              <rect x="14" y="4" width="4" height="16" rx="1" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          )}
+        </button>
+
+        {/* Progress bar + time */}
+        <div className="flex-1 min-w-0">
+          <input
+            type="range"
+            min={0}
+            max={duration || 100}
+            value={currentTime}
+            onChange={seek}
+            disabled={!loaded}
+            className="w-full h-1.5 rounded-full accent-[#00C2C7] cursor-pointer disabled:opacity-40"
+          />
+          <div className="flex justify-between text-xs text-white/50 mt-1">
+            <span>{fmt(currentTime)}</span>
+            <span>{loaded ? fmt(duration) : "—"}</span>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-white/50 text-xs mt-3 text-center">
+        Écoutez l&apos;extrait, puis répondez aux questions ci-dessous.
+      </p>
+    </div>
+  );
+}
+
+/* ─── Scenario view ───────────────────────────────────────────── */
 
 function ScenarioView({
   scenario,
-  answers,
+  savedAnswers,
   onAnswer,
   onBack,
 }: {
   scenario: Scenario;
-  answers: Record<number, number>;
+  savedAnswers: Record<number, number>;
   onAnswer: (qIndex: number, optionIndex: number) => void;
   onBack: () => void;
 }) {
-  const answeredAll = scenario.questions.every((_, i) => answers[i] !== undefined);
-  const correctCount = scenario.questions.filter((q, i) => answers[i] === q.correct).length;
+  // Local answer state so we can control submit timing
+  const [pending, setPending] = useState<Record<number, number>>(savedAnswers);
+  const [submitted, setSubmitted] = useState(
+    scenario.questions.every((_, i) => savedAnswers[i] !== undefined)
+  );
+  const [showTranscript, setShowTranscript] = useState(false);
+
+  const allPending = scenario.questions.every((_, i) => pending[i] !== undefined);
+  const correctCount = scenario.questions.filter((q, i) => pending[i] === q.correct).length;
+
+  function pick(qi: number, oi: number) {
+    if (submitted) return;
+    setPending((p) => ({ ...p, [qi]: oi }));
+  }
+
+  function submit() {
+    // Persist each answer
+    scenario.questions.forEach((_, qi) => {
+      if (pending[qi] !== undefined) onAnswer(qi, pending[qi]);
+    });
+    setSubmitted(true);
+  }
 
   return (
     <div>
@@ -900,34 +1006,25 @@ function ScenarioView({
         Retour à la liste
       </button>
 
-      {/* Scenario header */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-5">
-        <div className="flex items-center gap-2 flex-wrap mb-3">
+      {/* Header */}
+      <div className="mb-5">
+        <div className="flex items-center gap-2 flex-wrap mb-2">
           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${scenario.tagColor}`}>{scenario.tag}</span>
           <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">{scenario.type}</span>
         </div>
-        <h2 className="text-lg font-bold text-[#0B1E4B] mb-4">{scenario.title}</h2>
+        <h2 className="text-xl font-bold text-[#0B1E4B]">{scenario.title}</h2>
+      </div>
 
-        {/* Transcript */}
-        <div className="bg-[#F7F9FC] border border-gray-100 rounded-xl p-5">
-          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-base">📄</span>
-              <span className="text-xs font-semibold text-[#0B1E4B] uppercase tracking-wide">Transcript d&apos;écoute</span>
-            </div>
-            <span className="text-xs text-gray-400 italic">Version transcript — audio réel à venir</span>
-          </div>
-          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line font-mono">
-            {scenario.transcript}
-          </div>
-        </div>
+      {/* Audio player */}
+      <div className="mb-6">
+        <AudioPlayer src={`/audio/${scenario.id}.m4a`} />
       </div>
 
       {/* Questions */}
-      <div className="space-y-5">
+      <div className="space-y-5 mb-6">
         {scenario.questions.map((q, qi) => {
-          const selected = answers[qi];
-          const isAnswered = selected !== undefined;
+          const selected = pending[qi];
+          const isAnswered = submitted && selected !== undefined;
           const isCorrect = selected === q.correct;
 
           return (
@@ -940,6 +1037,7 @@ function ScenarioView({
               <div className="space-y-2.5">
                 {q.options.map((opt, oi) => {
                   let style = "border-gray-200 text-gray-700 hover:border-[#0B1E4B]/30 hover:bg-gray-50";
+                  if (!submitted && selected === oi) style = "border-[#0B1E4B] bg-[#0B1E4B]/5 text-[#0B1E4B]";
                   if (isAnswered) {
                     if (oi === q.correct) style = "border-green-400 bg-green-50 text-green-800";
                     else if (oi === selected) style = "border-red-300 bg-red-50 text-red-700";
@@ -949,16 +1047,19 @@ function ScenarioView({
                   return (
                     <button
                       key={oi}
-                      disabled={isAnswered}
-                      onClick={() => onAnswer(qi, oi)}
-                      className={`w-full text-left border rounded-xl px-4 py-3 text-sm transition-all flex items-start gap-3 ${style} ${isAnswered ? "cursor-default" : "cursor-pointer"}`}
+                      disabled={submitted}
+                      onClick={() => pick(qi, oi)}
+                      className={`w-full text-left border rounded-xl px-4 py-3 text-sm transition-all flex items-start gap-3 ${style} ${submitted ? "cursor-default" : "cursor-pointer"}`}
                     >
                       <span className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 text-xs font-bold ${
                         isAnswered && oi === q.correct ? "border-green-500 bg-green-500 text-white" :
                         isAnswered && oi === selected ? "border-red-400 bg-red-400 text-white" :
+                        !submitted && selected === oi ? "border-[#0B1E4B] bg-[#0B1E4B] text-white" :
                         "border-gray-300"
                       }`}>
-                        {isAnswered && oi === q.correct ? "✓" : isAnswered && oi === selected ? "✗" : String.fromCharCode(65 + oi)}
+                        {isAnswered && oi === q.correct ? "✓" :
+                         isAnswered && oi === selected ? "✗" :
+                         String.fromCharCode(65 + oi)}
                       </span>
                       {opt}
                     </button>
@@ -966,7 +1067,6 @@ function ScenarioView({
                 })}
               </div>
 
-              {/* Explanation */}
               {isAnswered && (
                 <div className={`mt-4 p-4 rounded-xl text-sm leading-relaxed ${
                   isCorrect ? "bg-green-50 border border-green-200 text-green-800" : "bg-amber-50 border border-amber-200 text-amber-800"
@@ -980,17 +1080,62 @@ function ScenarioView({
         })}
       </div>
 
-      {/* Scenario result */}
-      {answeredAll && (
-        <div className="mt-6 p-5 bg-[#0B1E4B] rounded-2xl text-center">
-          <p className="text-white/70 text-sm mb-1">Résultat de ce scénario</p>
-          <p className="text-3xl font-bold text-[#00C2C7]">{correctCount} / {scenario.questions.length}</p>
-          <p className="text-white/60 text-sm mt-1">
-            {correctCount === 3 ? "Parfait — excellent travail !" : correctCount === 2 ? "Bon résultat — continuez !" : "À retravailler — lisez les explications."}
-          </p>
+      {/* Submit button */}
+      {!submitted && (
+        <button
+          onClick={submit}
+          disabled={!allPending}
+          className={`w-full py-4 rounded-xl font-semibold text-sm transition-all ${
+            allPending
+              ? "bg-[#0B1E4B] hover:bg-[#0B1E4B]/90 text-white"
+              : "bg-gray-100 text-gray-400 cursor-not-allowed"
+          }`}
+        >
+          {allPending ? "Valider mes réponses" : `Répondez aux ${scenario.questions.length} questions pour valider`}
+        </button>
+      )}
+
+      {/* Result card + transcript reveal */}
+      {submitted && (
+        <div className="mt-2 space-y-4">
+          <div className="p-5 bg-[#0B1E4B] rounded-2xl text-center">
+            <p className="text-white/70 text-sm mb-1">Résultat</p>
+            <p className="text-3xl font-bold text-[#00C2C7]">{correctCount} / {scenario.questions.length}</p>
+            <p className="text-white/60 text-sm mt-1">
+              {correctCount === 3 ? "Parfait — excellent travail !" :
+               correctCount === 2 ? "Bon résultat — continuez !" :
+               "À retravailler — relisez le transcript."}
+            </p>
+          </div>
+
+          {/* Transcript reveal */}
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <button
+              onClick={() => setShowTranscript((v) => !v)}
+              className="w-full flex items-center justify-between px-5 py-4 text-sm font-semibold text-[#0B1E4B] hover:bg-gray-50 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <span>📄</span> Voir la transcription
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${showTranscript ? "rotate-180" : ""}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showTranscript && (
+              <div className="px-5 pb-5 border-t border-gray-100">
+                <div className="pt-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line font-mono">
+                  {scenario.transcript}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={onBack}
-            className="mt-4 bg-[#00C2C7] hover:bg-[#009DA1] text-white font-semibold px-6 py-2.5 rounded-full transition-colors text-sm"
+            className="w-full bg-[#00C2C7] hover:bg-[#009DA1] text-white font-semibold py-3.5 rounded-xl transition-colors text-sm"
           >
             Scénario suivant →
           </button>
