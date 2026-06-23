@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 /* ─── Data ────────────────────────────────────────────────────── */
@@ -183,11 +183,119 @@ Ward Nurse, Respiratory Unit`,
 ];
 
 const STORAGE_KEY = "oet_writing_completed";
+const DRAFT_KEY   = "oet_writing_drafts";
+const MIN_WORDS   = 180;
+const MAX_WORDS   = 200;
 
-/* ─── Component ───────────────────────────────────────────────── */
+/* ─── Helpers ─────────────────────────────────────────────────── */
+
+function countWords(text: string): number {
+  return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+}
+
+function wordCountColor(n: number): string {
+  if (n === 0) return "text-gray-400";
+  if (n < MIN_WORDS) return "text-amber-600";
+  if (n <= MAX_WORDS) return "text-green-600";
+  return "text-red-500";
+}
+
+function completionLabel(n: number): { label: string; pct: number } {
+  if (n === 0) return { label: "Non commencée", pct: 0 };
+  if (n < MIN_WORDS) {
+    const pct = Math.round((n / MIN_WORDS) * 90);
+    return { label: `${n} mots — encore ${MIN_WORDS - n} à écrire`, pct };
+  }
+  if (n <= MAX_WORDS) return { label: `${n} mots — dans la cible ✓`, pct: 100 };
+  return { label: `${n} mots — trop long (max ${MAX_WORDS})`, pct: 100 };
+}
+
+/* ─── WritingArea component ───────────────────────────────────── */
+
+function WritingArea({
+  scenarioId,
+  initialDraft,
+  onDraftChange,
+}: {
+  scenarioId: string;
+  initialDraft: string;
+  onDraftChange: (id: string, text: string) => void;
+}) {
+  const [text, setText] = useState(initialDraft);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  const wordCount = countWords(text);
+  const { label: compLabel, pct: compPct } = completionLabel(wordCount);
+  const inTarget = wordCount >= MIN_WORDS && wordCount <= MAX_WORDS;
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value;
+    setText(val);
+    // Debounce autosave 800 ms
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      onDraftChange(scenarioId, val);
+      setSavedAt(new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
+    }, 800);
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Textarea */}
+      <textarea
+        value={text}
+        onChange={handleChange}
+        placeholder="Commencez à rédiger votre lettre ici…"
+        spellCheck
+        className="w-full min-h-[320px] resize-y rounded-xl border border-gray-200 bg-white px-4 py-4 text-sm text-gray-800 leading-relaxed focus:outline-none focus:border-[#00C2C7] focus:ring-2 focus:ring-[#00C2C7]/20 transition-all placeholder-gray-300 font-[inherit]"
+      />
+
+      {/* Word counter + progress */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {/* Progress bar */}
+          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                inTarget ? "bg-green-500" : wordCount > MAX_WORDS ? "bg-red-400" : "bg-amber-400"
+              }`}
+              style={{ width: `${Math.min(compPct, 100)}%` }}
+            />
+          </div>
+          <span className={`text-xs font-medium whitespace-nowrap ${wordCountColor(wordCount)}`}>
+            {compLabel}
+          </span>
+        </div>
+
+        {/* Live word count badge */}
+        <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${
+          inTarget
+            ? "bg-green-100 text-green-700"
+            : wordCount > MAX_WORDS
+            ? "bg-red-100 text-red-600"
+            : wordCount === 0
+            ? "bg-gray-100 text-gray-400"
+            : "bg-amber-100 text-amber-700"
+        }`}>
+          {wordCount} / {MIN_WORDS}–{MAX_WORDS} mots
+        </span>
+      </div>
+
+      {/* Autosave indicator */}
+      <div className="flex items-center justify-between text-xs text-gray-400">
+        <span>Cible : {MIN_WORDS}–{MAX_WORDS} mots · 45 minutes</span>
+        {savedAt && <span>Brouillon sauvegardé à {savedAt}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main component ──────────────────────────────────────────── */
 
 export default function WritingClient() {
   const [completed, setCompleted] = useState<Set<string>>(new Set());
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [hydrated, setHydrated] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(SCENARIOS[0].id);
   const [shownAnswers, setShownAnswers] = useState<Set<string>>(new Set());
@@ -196,17 +304,25 @@ export default function WritingClient() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setCompleted(new Set(JSON.parse(raw) as string[]));
+      const rawDrafts = localStorage.getItem(DRAFT_KEY);
+      if (rawDrafts) setDrafts(JSON.parse(rawDrafts) as Record<string, string>);
     } catch {}
     setHydrated(true);
   }, []);
 
-  function toggleCompleted(id: string) {
+  function saveDraft(id: string, text: string) {
+    setDrafts((prev) => {
+      const next = { ...prev, [id]: text };
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  function markCompleted(id: string) {
     setCompleted((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
-      } catch {}
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch {}
       return next;
     });
   }
@@ -269,7 +385,7 @@ export default function WritingClient() {
           <div className="bg-[#0B1E4B]/5 border border-[#0B1E4B]/10 rounded-xl px-5 py-4 mb-6 flex gap-3 items-start">
             <span className="text-lg flex-shrink-0">💡</span>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Rédigez votre lettre sur papier ou dans un éditeur de texte avant de consulter la lettre modèle. Respectez la structure OET : objet, antécédents, traitement, recommandation. Visez 180–200 mots en 45 minutes.
+              Rédigez directement dans la zone de texte. Respectez la structure OET : objet, antécédents, traitement, recommandation. Votre brouillon est sauvegardé automatiquement. Visez 180–200 mots en 45 minutes.
             </p>
           </div>
 
@@ -279,6 +395,9 @@ export default function WritingClient() {
               const isDone = hydrated && completed.has(scenario.id);
               const isExpanded = expanded === scenario.id;
               const isAnswerShown = shownAnswers.has(scenario.id);
+              const draft = drafts[scenario.id] ?? "";
+              const wc = countWords(draft);
+              const inTarget = wc >= MIN_WORDS && wc <= MAX_WORDS;
 
               return (
                 <div
@@ -301,9 +420,7 @@ export default function WritingClient() {
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
-                      ) : (
-                        index + 1
-                      )}
+                      ) : index + 1}
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-0.5">
@@ -311,6 +428,14 @@ export default function WritingClient() {
                         <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${scenario.tagColor}`}>
                           {scenario.tag}
                         </span>
+                        {/* Draft word count pill in header */}
+                        {hydrated && wc > 0 && !isDone && (
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            inTarget ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {wc} mots
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400 truncate">{scenario.patientSummary.slice(0, 80)}…</p>
                     </div>
@@ -363,6 +488,18 @@ export default function WritingClient() {
                         </ul>
                       </div>
 
+                      {/* Writing area */}
+                      <div className="mb-5">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                          Votre lettre
+                        </p>
+                        <WritingArea
+                          scenarioId={scenario.id}
+                          initialDraft={draft}
+                          onDraftChange={saveDraft}
+                        />
+                      </div>
+
                       {/* Model answer toggle */}
                       <div className="mb-5">
                         <button
@@ -394,12 +531,16 @@ export default function WritingClient() {
 
                       {/* Mark as completed */}
                       <button
-                        onClick={() => toggleCompleted(scenario.id)}
+                        onClick={() => markCompleted(scenario.id)}
                         className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all border-2 ${
                           isDone
                             ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
-                            : "border-[#0B1E4B] bg-[#0B1E4B] text-white hover:bg-[#152960]"
+                            : inTarget
+                            ? "border-[#0B1E4B] bg-[#0B1E4B] text-white hover:bg-[#152960]"
+                            : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
                         }`}
+                        disabled={!isDone && !inTarget}
+                        title={!inTarget && !isDone ? `Atteignez ${MIN_WORDS}–${MAX_WORDS} mots pour valider` : undefined}
                       >
                         {isDone ? (
                           <>
@@ -413,7 +554,7 @@ export default function WritingClient() {
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
-                            Marquer comme rédigée
+                            {inTarget ? "Marquer comme rédigée" : `Écrivez encore ${Math.max(0, MIN_WORDS - wc)} mots pour valider`}
                           </>
                         )}
                       </button>
@@ -436,7 +577,7 @@ export default function WritingClient() {
               href="/mock-exam"
               className="flex-1 text-center bg-[#00C2C7] hover:bg-[#009DA1] text-white font-semibold py-3.5 rounded-xl transition-colors text-sm"
             >
-              Démarrer ma formation →
+              Examen blanc →
             </Link>
           </div>
         </div>
