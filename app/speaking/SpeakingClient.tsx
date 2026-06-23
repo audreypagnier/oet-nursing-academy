@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 
 /* ─── Data ────────────────────────────────────────────────────── */
@@ -176,12 +176,307 @@ const SCENARIOS: Scenario[] = [
 
 const STORAGE_KEY = "oet_speaking_practiced";
 
-/* ─── Component ───────────────────────────────────────────────── */
+/* ─── Recording types ─────────────────────────────────────────── */
+
+type RecordingState = "idle" | "requesting" | "recording" | "recorded" | "error";
+
+type Recording = {
+  url: string;       // object URL — valid for current session
+  blob: Blob;
+  durationSec: number;
+};
+
+/* ─── Timer helper ────────────────────────────────────────────── */
+
+function fmtDuration(sec: number): string {
+  const m = Math.floor(sec / 60).toString().padStart(2, "0");
+  const s = (sec % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+/* ─── RecorderPanel component ─────────────────────────────────── */
+
+function RecorderPanel({
+  scenarioId,
+  onRecordingComplete,
+}: {
+  scenarioId: string;
+  onRecordingComplete: () => void;
+}) {
+  const [state, setState]         = useState<RecordingState>("idle");
+  const [recording, setRecording] = useState<Recording | null>(null);
+  const [elapsed, setElapsed]     = useState(0);
+  const [errorMsg, setErrorMsg]   = useState("");
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef        = useRef<Blob[]>([]);
+  const streamRef        = useRef<MediaStream | null>(null);
+  const timerRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef     = useRef<number>(0);
+
+  // Clean up object URLs and streams when component unmounts
+  useEffect(() => {
+    return () => {
+      stopTimer();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      if (recording?.url) URL.revokeObjectURL(recording.url);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function stopTimer() {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  async function startRecording() {
+    setState("requesting");
+    setErrorMsg("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      // Pick the best supported MIME type
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg", ""]
+        .find((m) => !m || MediaRecorder.isTypeSupported(m)) ?? "";
+
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = mr;
+      chunksRef.current = [];
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mr.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+        const url  = URL.createObjectURL(blob);
+        const durationSec = Math.round((Date.now() - startTimeRef.current) / 1000);
+        setRecording({ url, blob, durationSec });
+        setState("recorded");
+        // Stop all tracks
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        stopTimer();
+        onRecordingComplete();
+      };
+
+      mr.start(250); // collect chunks every 250 ms
+      startTimeRef.current = Date.now();
+      setElapsed(0);
+      setState("recording");
+
+      // Start timer
+      timerRef.current = setInterval(() => {
+        setElapsed(Math.round((Date.now() - startTimeRef.current) / 1000));
+      }, 500);
+
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("Permission") || msg.includes("NotAllowed") || msg.includes("denied")) {
+        setErrorMsg("Accès au microphone refusé. Autorisez le microphone dans les paramètres de votre navigateur.");
+      } else if (msg.includes("NotFound") || msg.includes("Devices")) {
+        setErrorMsg("Aucun microphone détecté sur cet appareil.");
+      } else {
+        setErrorMsg("Impossible d'accéder au microphone. Vérifiez vos paramètres.");
+      }
+      setState("error");
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+  }
+
+  function deleteRecording() {
+    if (recording?.url) URL.revokeObjectURL(recording.url);
+    setRecording(null);
+    setState("idle");
+    setElapsed(0);
+  }
+
+  function downloadRecording() {
+    if (!recording) return;
+    const ext  = recording.blob.type.includes("ogg") ? "ogg" : "webm";
+    const link = document.createElement("a");
+    link.href  = recording.url;
+    link.download = `oet-speaking-${scenarioId}-${Date.now()}.${ext}`;
+    link.click();
+  }
+
+  // ── Idle state ──
+  if (state === "idle") {
+    return (
+      <button
+        onClick={startRecording}
+        className="w-full flex items-center justify-center gap-2.5 py-3 bg-rose-50 hover:bg-rose-100 border-2 border-rose-200 hover:border-rose-300 text-rose-700 font-semibold rounded-xl text-sm transition-all"
+      >
+        <MicIcon className="w-4 h-4" />
+        Démarrer l&apos;enregistrement
+      </button>
+    );
+  }
+
+  // ── Requesting permission ──
+  if (state === "requesting") {
+    return (
+      <div className="w-full flex items-center justify-center gap-2.5 py-3 bg-gray-50 border-2 border-gray-200 text-gray-500 rounded-xl text-sm">
+        <span className="w-3 h-3 rounded-full bg-gray-400 animate-pulse" />
+        Demande d&apos;accès au microphone…
+      </div>
+    );
+  }
+
+  // ── Error state ──
+  if (state === "error") {
+    return (
+      <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4">
+        <p className="text-sm text-red-700 font-medium mb-3">{errorMsg}</p>
+        <button
+          onClick={() => { setState("idle"); setErrorMsg(""); }}
+          className="text-xs px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
+
+  // ── Recording in progress ──
+  if (state === "recording") {
+    return (
+      <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+            <span className="text-sm font-semibold text-rose-700">Enregistrement en cours</span>
+          </div>
+          <span className="text-lg font-mono font-bold text-rose-700 tabular-nums">
+            {fmtDuration(elapsed)}
+          </span>
+        </div>
+        {/* Waveform animation */}
+        <div className="flex items-center gap-0.5 h-8 mb-3">
+          {Array.from({ length: 24 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex-1 bg-rose-400 rounded-full"
+              style={{
+                height: `${30 + Math.sin((i + elapsed * 3) * 0.8) * 50}%`,
+                animationDelay: `${i * 40}ms`,
+                opacity: 0.6 + (i % 3) * 0.15,
+              }}
+            />
+          ))}
+        </div>
+        <button
+          onClick={stopRecording}
+          className="w-full flex items-center justify-center gap-2 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg text-sm transition-colors"
+        >
+          <StopIcon className="w-4 h-4" />
+          Arrêter l&apos;enregistrement
+        </button>
+      </div>
+    );
+  }
+
+  // ── Recorded ──
+  if (state === "recorded" && recording) {
+    return (
+      <div className="rounded-xl border-2 border-[#00C2C7]/30 bg-[#00C2C7]/5 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#009DA1]" />
+            <span className="text-sm font-semibold text-[#0B1E4B]">Enregistrement prêt</span>
+          </div>
+          <span className="text-xs text-gray-400 font-mono">{fmtDuration(recording.durationSec)}</span>
+        </div>
+
+        {/* Native audio player */}
+        <audio
+          controls
+          src={recording.url}
+          className="w-full h-10 mb-3"
+          style={{ borderRadius: "8px" }}
+        />
+
+        {/* Actions */}
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={startRecording}
+            className="flex flex-col items-center gap-1 py-2.5 bg-white border border-gray-200 hover:border-[#0B1E4B]/40 text-gray-600 hover:text-[#0B1E4B] rounded-lg text-xs font-medium transition-all"
+          >
+            <MicIcon className="w-4 h-4" />
+            Ré-enregistrer
+          </button>
+          <button
+            onClick={downloadRecording}
+            className="flex flex-col items-center gap-1 py-2.5 bg-white border border-gray-200 hover:border-[#00C2C7]/60 text-gray-600 hover:text-[#009DA1] rounded-lg text-xs font-medium transition-all"
+          >
+            <DownloadIcon className="w-4 h-4" />
+            Télécharger
+          </button>
+          <button
+            onClick={deleteRecording}
+            className="flex flex-col items-center gap-1 py-2.5 bg-white border border-gray-200 hover:border-red-300 text-gray-600 hover:text-red-600 rounded-lg text-xs font-medium transition-all"
+          >
+            <TrashIcon className="w-4 h-4" />
+            Supprimer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+/* ─── Icon components ─────────────────────────────────────────── */
+
+function MicIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+    </svg>
+  );
+}
+
+function StopIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+      <rect x="5" y="5" width="14" height="14" rx="2" />
+    </svg>
+  );
+}
+
+function DownloadIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
+/* ─── Main component ──────────────────────────────────────────── */
 
 export default function SpeakingClient() {
-  const [practiced, setPracticed] = useState<Set<string>>(new Set());
-  const [hydrated, setHydrated] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(SCENARIOS[0].id);
+  const [practiced, setPracticed]   = useState<Set<string>>(new Set());
+  const [hydrated, setHydrated]     = useState(false);
+  const [expanded, setExpanded]     = useState<string | null>(SCENARIOS[0].id);
   const [openResponse, setOpenResponse] = useState<string | null>(null);
 
   useEffect(() => {
@@ -192,20 +487,28 @@ export default function SpeakingClient() {
     setHydrated(true);
   }, []);
 
+  const markPracticed = useCallback((id: string) => {
+    setPracticed((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }, []);
+
   function togglePracticed(id: string) {
     setPracticed((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
-      } catch {}
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch {}
       return next;
     });
   }
 
   const practicedCount = hydrated ? practiced.size : 0;
-  const total = SCENARIOS.length;
-  const progressPct = Math.round((practicedCount / total) * 100);
+  const total          = SCENARIOS.length;
+  const progressPct    = Math.round((practicedCount / total) * 100);
 
   return (
     <div className="min-h-screen bg-[#F7F9FC] flex flex-col">
@@ -253,7 +556,8 @@ export default function SpeakingClient() {
           <div className="bg-[#0B1E4B]/5 border border-[#0B1E4B]/10 rounded-xl px-5 py-4 mb-6 flex gap-3 items-start">
             <span className="text-lg flex-shrink-0">💡</span>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Pour chaque scénario, lisez la situation, puis essayez de répondre à voix haute avant de consulter les réponses suggérées. Enregistrez-vous si possible pour évaluer votre fluidité.
+              Lisez la situation, puis parlez à voix haute comme si vous étiez face au patient. Enregistrez-vous pour évaluer votre fluidité, puis comparez avec les réponses suggérées.
+              <span className="text-gray-400 block mt-1 text-xs">Les enregistrements sont stockés localement et disparaissent si vous fermez la page.</span>
             </p>
           </div>
 
@@ -261,7 +565,7 @@ export default function SpeakingClient() {
           <div className="space-y-4">
             {SCENARIOS.map((scenario, index) => {
               const isPracticed = hydrated && practiced.has(scenario.id);
-              const isExpanded = expanded === scenario.id;
+              const isExpanded  = expanded === scenario.id;
 
               return (
                 <div
@@ -270,7 +574,7 @@ export default function SpeakingClient() {
                     isPracticed ? "border-green-200" : "border-gray-200"
                   }`}
                 >
-                  {/* Scenario header — always visible */}
+                  {/* Scenario header */}
                   <button
                     className="w-full text-left px-6 py-5 flex items-center gap-4"
                     onClick={() => setExpanded(isExpanded ? null : scenario.id)}
@@ -340,6 +644,17 @@ export default function SpeakingClient() {
                         </div>
                       </div>
 
+                      {/* Voice recorder */}
+                      <div className="mb-5">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                          Enregistrement vocal
+                        </p>
+                        <RecorderPanel
+                          scenarioId={scenario.id}
+                          onRecordingComplete={() => markPracticed(scenario.id)}
+                        />
+                      </div>
+
                       {/* Suggested responses */}
                       <div className="mb-5">
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
@@ -347,7 +662,7 @@ export default function SpeakingClient() {
                         </p>
                         <div className="space-y-2">
                           {scenario.responses.map((r, i) => {
-                            const key = `${scenario.id}-r${i}`;
+                            const key    = `${scenario.id}-r${i}`;
                             const isOpen = openResponse === key;
                             return (
                               <div key={i} className="border border-gray-100 rounded-xl overflow-hidden">
@@ -394,9 +709,7 @@ export default function SpeakingClient() {
                           </>
                         ) : (
                           <>
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
+                            <MicIcon className="w-4 h-4" />
                             Marquer comme pratiqué
                           </>
                         )}
