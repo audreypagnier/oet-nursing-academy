@@ -182,10 +182,216 @@ Ward Nurse, Respiratory Unit`,
   },
 ];
 
-const STORAGE_KEY = "oet_writing_completed";
-const DRAFT_KEY   = "oet_writing_drafts";
-const MIN_WORDS   = 180;
-const MAX_WORDS   = 200;
+const STORAGE_KEY  = "oet_writing_completed";
+const DRAFT_KEY    = "oet_writing_drafts";
+const EVAL_KEY     = "oet_writing_evals";
+const MIN_WORDS    = 180;
+const MAX_WORDS    = 200;
+
+/* ─── Self-evaluation data ────────────────────────────────────── */
+
+type Rating = "needs-work" | "acceptable" | "good";
+type EvalState = Record<string, Rating>; // categoryId → rating
+
+const EVAL_CATEGORIES = [
+  {
+    id: "purpose",
+    label: "Purpose achieved",
+    fr: "Objectif atteint",
+    desc: "La lettre remplit clairement son objectif (référence, transfert, etc.).",
+    advice: {
+      "needs-work": "Relisez la tâche et assurez-vous que votre ouverture indique explicitement le but de la lettre dès la première phrase.",
+      "acceptable": "L'objectif est présent mais pourrait être plus direct. Essayez d'ouvrir avec : « I am writing to refer / transfer / inform… »",
+      "good": "Objectif clairement exprimé. Continuez à structurer ainsi.",
+    },
+  },
+  {
+    id: "clinical",
+    label: "Relevant clinical information",
+    fr: "Informations cliniques pertinentes",
+    desc: "Les données clés du dossier patient sont incluses et correctement rapportées.",
+    advice: {
+      "needs-work": "Comparez point par point avec la liste « Points clés à inclure ». Chaque élément du dossier doit apparaître dans votre lettre.",
+      "acceptable": "La plupart des informations cliniques sont présentes, mais certains détails importants (médicaments, résultats) manquent ou sont imprécis.",
+      "good": "Toutes les informations cliniques pertinentes sont présentes et précises.",
+    },
+  },
+  {
+    id: "organisation",
+    label: "Organisation and structure",
+    fr: "Organisation et structure",
+    desc: "La lettre suit la structure OET : en-tête, objet, antécédents, traitement, recommandation, formule de politesse.",
+    advice: {
+      "needs-work": "Structurez votre lettre en paragraphes distincts : (1) raison de la référence, (2) antécédents et traitement, (3) statut actuel, (4) demande et formule de politesse.",
+      "acceptable": "La structure est reconnaissable mais les paragraphes se mélangent. Séparez clairement chaque section.",
+      "good": "Structure claire et logique, conforme aux attentes OET.",
+    },
+  },
+  {
+    id: "tone",
+    label: "Formal professional tone",
+    fr: "Ton formel et professionnel",
+    desc: "Le registre est formel, les formules de politesse sont appropriées, aucun langage familier.",
+    advice: {
+      "needs-work": "Évitez les contractions (I'm → I am), les expressions familières et les abréviations non médicales. Utilisez des formules comme « I would be grateful if… », « Please do not hesitate to… »",
+      "acceptable": "Le ton est généralement correct mais quelques tournures sont trop informelles. Revisez les formules d'ouverture et de clôture.",
+      "good": "Ton parfaitement adapté à une communication professionnelle médicale.",
+    },
+  },
+  {
+    id: "grammar",
+    label: "Grammar and accuracy",
+    fr: "Grammaire et précision",
+    desc: "Les phrases sont correctes, les temps verbaux cohérents, la ponctuation appropriée.",
+    advice: {
+      "needs-work": "Relisez phrase par phrase. Vérifiez les accords sujet-verbe, les temps (passé pour les antécédents, présent pour le statut actuel) et la ponctuation.",
+      "acceptable": "Quelques erreurs grammaticales ou de ponctuation. Portez attention aux constructions passives (« was commenced on », « was referred to »), très courantes en rédaction médicale.",
+      "good": "Grammaire solide et langage médical précis.",
+    },
+  },
+  {
+    id: "wordcount",
+    label: "Word count target",
+    fr: "Respect de la cible de mots",
+    desc: "La lettre se situe dans la plage cible de 180 à 200 mots.",
+    advice: {
+      "needs-work": "Vérifiez le compteur de mots ci-dessus. Une lettre trop courte manque d'informations ; une lettre trop longue dépasse le temps imparti en examen.",
+      "acceptable": "Vous êtes proche de la cible. Ajustez en ajoutant un détail clinique ou en reformulant une phrase pour rester dans la plage.",
+      "good": "Parfait — la lettre respecte la contrainte de longueur OET.",
+    },
+  },
+] as const;
+
+type CategoryId = typeof EVAL_CATEGORIES[number]["id"];
+
+const RATING_SCORE: Record<Rating, number> = { "needs-work": 0, "acceptable": 1, "good": 2 };
+
+function calcOETScore(eval_: EvalState): { score: number; grade: string; label: string } {
+  const filled = EVAL_CATEGORIES.filter((c) => eval_[c.id]);
+  if (filled.length === 0) return { score: 0, grade: "—", label: "Complétez l'auto-évaluation" };
+  const total = filled.reduce((s, c) => s + RATING_SCORE[eval_[c.id] as Rating], 0);
+  const max = filled.length * 2;
+  const pct = total / max;
+  if (pct >= 0.85) return { score: Math.round(pct * 100), grade: "A", label: "Excellent — prêt(e) pour l'OET" };
+  if (pct >= 0.65) return { score: Math.round(pct * 100), grade: "B", label: "Bon niveau — objectif atteint" };
+  if (pct >= 0.45) return { score: Math.round(pct * 100), grade: "C", label: "En progression — à consolider" };
+  return { score: Math.round(pct * 100), grade: "D", label: "À retravailler en priorité" };
+}
+
+/* ─── SelfEvalChecklist component ────────────────────────────── */
+
+function SelfEvalChecklist({
+  scenarioId,
+  initialEval,
+  onEvalChange,
+}: {
+  scenarioId: string;
+  initialEval: EvalState;
+  onEvalChange: (id: string, eval_: EvalState) => void;
+}) {
+  const [eval_, setEval] = useState<EvalState>(initialEval);
+  const { score, grade, label } = calcOETScore(eval_);
+  const filledCount = EVAL_CATEGORIES.filter((c) => eval_[c.id]).length;
+  const allFilled = filledCount === EVAL_CATEGORIES.length;
+
+  function pick(catId: CategoryId, rating: Rating) {
+    const next = { ...eval_, [catId]: rating };
+    setEval(next);
+    onEvalChange(scenarioId, next);
+  }
+
+  const gradeColor =
+    grade === "A" ? { pill: "bg-green-100 text-green-700", bar: "bg-green-500" } :
+    grade === "B" ? { pill: "bg-[#00C2C7]/15 text-[#009DA1]", bar: "bg-[#00C2C7]" } :
+    grade === "C" ? { pill: "bg-amber-100 text-amber-700", bar: "bg-amber-400" } :
+    grade === "D" ? { pill: "bg-red-100 text-red-600", bar: "bg-red-400" } :
+                    { pill: "bg-gray-100 text-gray-500", bar: "bg-gray-300" };
+
+  const RATING_OPTIONS: { value: Rating; label: string; active: string }[] = [
+    { value: "needs-work", label: "À améliorer", active: "border-red-400 bg-red-50 text-red-700" },
+    { value: "acceptable", label: "Acceptable",  active: "border-amber-400 bg-amber-50 text-amber-700" },
+    { value: "good",       label: "Bien",        active: "border-green-400 bg-green-50 text-green-700" },
+  ];
+
+  return (
+    <div className="border border-gray-200 rounded-2xl overflow-hidden">
+      {/* Header */}
+      <div className="bg-[#F7F9FC] px-5 py-4 border-b border-gray-100">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+          Auto-évaluation
+        </p>
+        <p className="text-xs text-gray-500">
+          Évaluez honnêtement votre lettre sur chaque critère OET.
+        </p>
+      </div>
+
+      {/* Categories */}
+      <div className="divide-y divide-gray-100">
+        {EVAL_CATEGORIES.map((cat) => {
+          const selected = eval_[cat.id] as Rating | undefined;
+          return (
+            <div key={cat.id} className="px-5 py-4">
+              <div className="flex items-start justify-between gap-3 mb-2.5">
+                <div>
+                  <p className="text-sm font-semibold text-[#0B1E4B]">{cat.fr}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{cat.desc}</p>
+                </div>
+              </div>
+              {/* Rating buttons */}
+              <div className="grid grid-cols-3 gap-2">
+                {RATING_OPTIONS.map((opt) => {
+                  const isActive = selected === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => pick(cat.id as CategoryId, opt.value)}
+                      className={`py-2 px-1 rounded-lg border text-xs font-semibold transition-all ${
+                        isActive ? opt.active : "border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Personalised advice */}
+              {selected && (
+                <p className="mt-2.5 text-xs text-gray-600 leading-relaxed bg-gray-50 rounded-lg px-3 py-2">
+                  {cat.advice[selected]}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Score summary */}
+      <div className="bg-[#0B1E4B] px-5 py-5">
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <div>
+            <p className="text-white/60 text-xs mb-0.5">Score OET estimé</p>
+            <p className="text-white font-semibold text-sm">{label}</p>
+          </div>
+          <span className={`text-sm font-bold px-3 py-1.5 rounded-full flex-shrink-0 ${gradeColor.pill}`}>
+            {allFilled ? `Grade ${grade}` : `${filledCount}/${EVAL_CATEGORIES.length} critères`}
+          </span>
+        </div>
+        {/* Progress bar */}
+        <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${gradeColor.bar}`}
+            style={{ width: allFilled ? `${score}%` : `${(filledCount / EVAL_CATEGORIES.length) * 100}%` }}
+          />
+        </div>
+        {!allFilled && (
+          <p className="text-white/40 text-xs mt-2">
+            Évaluez tous les critères pour obtenir votre grade estimé.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /* ─── Helpers ─────────────────────────────────────────────────── */
 
@@ -296,6 +502,7 @@ function WritingArea({
 export default function WritingClient() {
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [evals, setEvals] = useState<Record<string, EvalState>>({});
   const [hydrated, setHydrated] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(SCENARIOS[0].id);
   const [shownAnswers, setShownAnswers] = useState<Set<string>>(new Set());
@@ -306,6 +513,8 @@ export default function WritingClient() {
       if (raw) setCompleted(new Set(JSON.parse(raw) as string[]));
       const rawDrafts = localStorage.getItem(DRAFT_KEY);
       if (rawDrafts) setDrafts(JSON.parse(rawDrafts) as Record<string, string>);
+      const rawEvals = localStorage.getItem(EVAL_KEY);
+      if (rawEvals) setEvals(JSON.parse(rawEvals) as Record<string, EvalState>);
     } catch {}
     setHydrated(true);
   }, []);
@@ -314,6 +523,14 @@ export default function WritingClient() {
     setDrafts((prev) => {
       const next = { ...prev, [id]: text };
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  function saveEval(id: string, eval_: EvalState) {
+    setEvals((prev) => {
+      const next = { ...prev, [id]: eval_ };
+      try { localStorage.setItem(EVAL_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
   }
@@ -398,6 +615,7 @@ export default function WritingClient() {
               const draft = drafts[scenario.id] ?? "";
               const wc = countWords(draft);
               const inTarget = wc >= MIN_WORDS && wc <= MAX_WORDS;
+              const evalState = evals[scenario.id] ?? {};
 
               return (
                 <div
@@ -497,6 +715,18 @@ export default function WritingClient() {
                           scenarioId={scenario.id}
                           initialDraft={draft}
                           onDraftChange={saveDraft}
+                        />
+                      </div>
+
+                      {/* Self-evaluation checklist */}
+                      <div className="mb-5">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                          Auto-évaluation
+                        </p>
+                        <SelfEvalChecklist
+                          scenarioId={scenario.id}
+                          initialEval={evalState}
+                          onEvalChange={saveEval}
                         />
                       </div>
 
