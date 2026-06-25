@@ -168,6 +168,25 @@ export default function DashboardClient() {
         {/* Readiness score */}
         {readiness && <ReadinessCard readiness={readiness} />}
 
+        {/* Annual Progress teaser */}
+        <Link
+          href="/annual-progress"
+          className="group flex items-center justify-between bg-white border border-gray-200 hover:border-[#00C2C7]/50 rounded-2xl p-5 mb-5 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00C2C7]/10 flex items-center justify-center flex-shrink-0">
+              <span className="text-lg">📅</span>
+            </div>
+            <div>
+              <p className="font-semibold text-[#0B1E4B] text-sm">Progression annuelle</p>
+              <p className="text-xs text-gray-400 mt-0.5">Calendrier GitHub-style de vos sessions {new Date().getFullYear()}</p>
+            </div>
+          </div>
+          <svg className="w-4 h-4 text-gray-400 group-hover:text-[#009DA1] transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+
         {/* CTA */}
         <div className="bg-[#0B1E4B] rounded-2xl p-6 mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>

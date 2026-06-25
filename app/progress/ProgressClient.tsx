@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { computeReadiness, type ReadinessData } from "../lib/readiness";
+import AnnualProgressCalendar from "../components/AnnualProgressCalendar";
 
 /* ─── Types ───────────────────────────────────────────────────── */
 
@@ -542,6 +543,17 @@ export default function ProgressClient() {
             </Link>
           </div>
         )}
+
+        {/* ── Annual Progress ── */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-[#0B1E4B]">Progression annuelle</h2>
+            <Link href="/annual-progress" className="text-xs font-semibold text-[#009DA1] hover:underline">
+              Voir en plein écran →
+            </Link>
+          </div>
+          <AnnualProgressCalendar />
+        </div>
 
         {/* ── Recommendations ── */}
         <div className="bg-[#0B1E4B] rounded-2xl p-5 mb-6">
