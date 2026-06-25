@@ -175,6 +175,7 @@ const SCENARIOS: Scenario[] = [
 ];
 
 const STORAGE_KEY = "oet_speaking_practiced";
+const DATES_KEY   = "oet_speaking_practiced_dates"; // Record<id, "YYYY-MM-DD">
 
 /* ─── Recording types ─────────────────────────────────────────── */
 
@@ -492,7 +493,13 @@ export default function SpeakingClient() {
       if (prev.has(id)) return prev;
       const next = new Set(prev);
       next.add(id);
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch {}
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+        const today = new Date().toISOString().slice(0, 10);
+        const dates = JSON.parse(localStorage.getItem(DATES_KEY) ?? "{}") as Record<string, string>;
+        dates[id] = today;
+        localStorage.setItem(DATES_KEY, JSON.stringify(dates));
+      } catch {}
       return next;
     });
   }, []);

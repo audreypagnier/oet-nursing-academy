@@ -671,6 +671,7 @@ function calcScore(correct: number, total: number): { grade: string; oet: string
 }
 
 const STORAGE_KEY = "oet_listening_completed";
+const DATES_KEY   = "oet_listening_completed_dates"; // Record<id, "YYYY-MM-DD">
 const TOTAL = SCENARIOS.length;
 
 /* ─── Main page ───────────────────────────────────────────────── */
@@ -708,7 +709,15 @@ export default function ListeningClient() {
     const scenario = SCENARIOS.find((s) => s.id === scenarioId)!;
     const allAnswered = scenario.questions.every((_, i) => nextAnswers[scenarioId]?.[i] !== undefined);
     const nextCompleted = new Set(completed);
-    if (allAnswered) nextCompleted.add(scenarioId);
+    if (allAnswered) {
+      nextCompleted.add(scenarioId);
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const dates = JSON.parse(localStorage.getItem(DATES_KEY) ?? "{}") as Record<string, string>;
+        dates[scenarioId] = today;
+        localStorage.setItem(DATES_KEY, JSON.stringify(dates));
+      } catch {}
+    }
     setCompleted(nextCompleted);
     persist(nextCompleted, nextAnswers);
   }

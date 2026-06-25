@@ -33,52 +33,69 @@ function safeRead<T>(key: string, fallback: T): T {
   } catch { return fallback; }
 }
 
-/** Compute today's completion status from each module's localStorage data. */
+/**
+ * Compute today's completion status from each module's localStorage data.
+ * Each module is only marked complete if the work was done TODAY.
+ *
+ * - Vocabulary  : streak weeklyActivity[today] >= 5
+ * - Listening   : today's scenario completed today (oet_listening_completed_dates)
+ * - Speaking    : today's scenario recorded today (oet_speaking_practiced_dates)
+ * - Writing     : today's task has an AI eval with evaluatedAt = today
+ */
 export function getDailyCompletion(): DailyCompletion {
   if (typeof window === "undefined") return EMPTY;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
 
   /* ── Vocabulary ── */
   const streak = safeRead<{ weeklyActivity?: Record<string, number> }>("oet_vocab_streak", {});
-  const vocabActivity = streak.weeklyActivity?.[todayStr] ?? 0;
+  const vocabActivity = streak.weeklyActivity?.[today] ?? 0;
   const vocabPercent  = Math.min(100, Math.round((vocabActivity / 5) * 100));
 
-  /* ── Speaking ── */
-  const practicedArr  = safeRead<string[]>("oet_speaking_practiced", []);
-  const practiced     = new Set(practicedArr);
-  const todaySpeaking = SPEAKING.find(s => !practiced.has(s.id)) ?? pick(SPEAKING);
-  const speakingDone  = practiced.has(todaySpeaking.id);
+  /* ── Speaking ──
+     oet_speaking_practiced_dates: Record<scenarioId, "YYYY-MM-DD">
+     Written by SpeakingClient.markPracticed() when a recording is completed.
+     We use `find` (same as generatePlan) to determine today's assigned scenario,
+     then verify its date equals today. */
+  const speakingPracticedArr = safeRead<string[]>("oet_speaking_practiced", []);
+  const speakingPracticed    = new Set(speakingPracticedArr);
+  const todaySpeaking        = SPEAKING.find(s => !speakingPracticed.has(s.id)) ?? pick(SPEAKING);
+  const speakingDates        = safeRead<Record<string, string>>("oet_speaking_practiced_dates", {});
+  const speakingDone         = speakingDates[todaySpeaking.id] === today;
 
-  /* ── Listening ── */
+  /* ── Listening ──
+     oet_listening_completed_dates: Record<scenarioId, "YYYY-MM-DD">
+     Written by ListeningClient.handleAnswer() when all questions are answered. */
   const listeningRaw = safeRead<{ completed?: string[]; answers?: Record<string, Record<number, number>> }>(
     "oet_listening_completed", {},
   );
   const listeningDoneSet = new Set(listeningRaw.completed ?? []);
   const listeningAnswers = listeningRaw.answers ?? {};
   const todayListening   = LISTENING.find(s => !listeningDoneSet.has(s.id)) ?? pick(LISTENING);
-  let listeningPercent   = 0;
-  if (listeningDoneSet.has(todayListening.id)) {
-    listeningPercent = 100;
-  } else {
-    const answered = Object.keys(listeningAnswers[todayListening.id] ?? {}).length;
-    listeningPercent = Math.round((answered / 3) * 100);
-  }
-  const listeningAnsweredCount = listeningDoneSet.has(todayListening.id)
+  const listeningDates   = safeRead<Record<string, string>>("oet_listening_completed_dates", {});
+  const listeningDone    = listeningDates[todayListening.id] === today;
+
+  // Partial: count answered questions for today's scenario (only matters if not done)
+  const listeningAnsweredCount = listeningDone
     ? 3
     : Object.keys(listeningAnswers[todayListening.id] ?? {}).length;
+  const listeningPercent = listeningDone ? 100 : Math.round((listeningAnsweredCount / 3) * 100);
 
-  /* ── Writing ── */
+  /* ── Writing ──
+     oet_writing_ai_evals: Record<scenarioId, AIWritingEval>
+     AIWritingEval.evaluatedAt is an ISO timestamp written when the AI eval is done.
+     Only count as complete if evaluatedAt date equals today. */
   const writingCompletedArr = safeRead<string[]>("oet_writing_completed", []);
   const writingCompleted    = new Set(writingCompletedArr);
   const todayWriting        = WRITING.find(w => !writingCompleted.has(w.id)) ?? pick(WRITING);
-  const aiEvals             = safeRead<Record<string, unknown>>("oet_writing_ai_evals", {});
-  const writingDone         = writingCompleted.has(todayWriting.id) || (todayWriting.id in aiEvals);
+  const aiEvals             = safeRead<Record<string, { evaluatedAt?: string }>>("oet_writing_ai_evals", {});
+  const writingEvalDate     = aiEvals[todayWriting.id]?.evaluatedAt?.slice(0, 10);
+  const writingDone         = writingEvalDate === today;
 
   /* ── Build result ── */
   const completedTaskIds: string[] = [];
   if (vocabPercent   >= 100) completedTaskIds.push("vocab");
-  if (listeningPercent >= 100) completedTaskIds.push("listening");
+  if (listeningDone)         completedTaskIds.push("listening");
   if (speakingDone)          completedTaskIds.push("speaking");
   if (writingDone)           completedTaskIds.push("writing");
 
@@ -99,9 +116,9 @@ export function getDailyCompletion(): DailyCompletion {
         : "Aucune carte révisée",
     },
     listening: {
-      completed: listeningPercent >= 100,
+      completed: listeningDone,
       percent: listeningPercent,
-      statusLabel: listeningPercent >= 100
+      statusLabel: listeningDone
         ? "Terminé"
         : listeningAnsweredCount > 0
         ? `${listeningAnsweredCount} / 3 questions`
